@@ -38,6 +38,10 @@ Activate it in Windows PowerShell:
 .venv\Scripts\Activate.ps1
 ```
 
+```bash (MacOS/Linux)
+source .venv/bin/activate
+```
+
 Install the required packages:
 
 ```bash
@@ -64,14 +68,14 @@ The OpenAPI specification is available at `http://127.0.0.1:8000/openapi.json`.
 
 ## Endpoints
 
-| Method | Endpoint | Description |
-| --- | --- | --- |
-| GET | `/` | Check that the API is running |
-| GET | `/products` | List products |
-| GET | `/products/{id}` | Get one product |
-| POST | `/products` | Create a product |
-| PUT | `/products/{id}` | Replace a product |
-| DELETE | `/products/{id}` | Delete a product |
+| Method | Endpoint         | Description                   |
+| ------ | ---------------- | ----------------------------- |
+| GET    | `/`              | Check that the API is running |
+| GET    | `/products`      | List products                 |
+| GET    | `/products/{id}` | Get one product               |
+| POST   | `/products`      | Create a product              |
+| PUT    | `/products/{id}` | Replace a product             |
+| DELETE | `/products/{id}` | Delete a product              |
 
 ## Testing
 
