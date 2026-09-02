@@ -1,5 +1,6 @@
 # Cloud-Native E-Commerce Platform
 
+--- Made by Varun, Shreyas, and Vishrut
 ## Week 1: FastAPI REST API
 
 This repository contains the Week 1 foundation of a cloud-native e-commerce backend. It provides a simple REST API for managing products. Product data is intentionally stored in memory for now, so it is lost whenever the application restarts.
