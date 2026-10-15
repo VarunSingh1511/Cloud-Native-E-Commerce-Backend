@@ -5,7 +5,7 @@ Full plan: `docs/PROJECT_PLAN.md`. Read it before planning any week's work.
 
 ## Current status
 - **Current week: 2** (Week 1 done: in-memory product CRUD API)
-- Week 2 starts with the Week 1 refactor (see "Pending Week 1 refactor"), then PostgreSQL + SQLAlchemy + Alembic.
+- Week 1 refactor done (see "Week 1 refactor"). Next: PostgreSQL + SQLAlchemy + Alembic on branch `week-2-database`.
 - Update this section when a week is finished.
 
 ## Priorities (in order)
@@ -36,17 +36,19 @@ infrastructure/    # Terraform (Week 10)
 .github/workflows/ # CI/CD (Week 11)
 ```
 
-## Pending Week 1 refactor (do first in Week 2, as its own branch/commit)
-- [ ] Restructure existing code into the target structure above
-- [ ] Move product endpoints into `routers/products.py` using `APIRouter`
-- [ ] Separate Pydantic schemas (`schemas/`) from route code
-- [ ] Add `core/config.py` using `pydantic-settings`; settings read from env vars (`DATABASE_URL`, `SECRET_KEY`, `ENVIRONMENT`); add `.env.example`
-- [ ] Add `GET /health` endpoint
-- [ ] Add `.gitignore` (venv, `.env`, `__pycache__`, `.pytest_cache`, later Terraform state)
-- [ ] Pin dependencies in `requirements.txt`
-- [ ] Add pytest + FastAPI `TestClient` and tests for existing product endpoints (success, 404, validation error)
-- [ ] Add type hints everywhere
-- [ ] Confirm `/docs` still works and all tests pass before moving on
+## Week 1 refactor (done on branch `week-2-refactor`)
+- [x] Restructure existing code into the target structure above (`core/` added; `db/`, `models/`, `services/` are created when they get real code)
+- [x] Move product endpoints into `routers/products.py` using `APIRouter`
+- [x] Separate Pydantic schemas (`schemas/`) from route code
+- [x] Add `core/config.py` using `pydantic-settings`; settings read from env vars (`DATABASE_URL`, `SECRET_KEY`, `ENVIRONMENT`); add `.env.example`
+- [x] Add `GET /health` endpoint
+- [x] Add `.gitignore` (venv, `.env`, `__pycache__`, `.pytest_cache`, Terraform state)
+- [x] Pin dependencies in `requirements.txt`
+- [x] Add pytest + FastAPI `TestClient` and tests for existing product endpoints (success, 404, validation error)
+- [x] Add type hints everywhere
+- [x] Confirm `/docs` still works and all tests pass before moving on
+
+Notes: tests set env vars in `tests/conftest.py`, so they don't need `.env`. The in-memory product list still lives in the router; it is replaced by the DB in the next step.
 
 ## Conventions
 - Type hints on all functions. Pydantic schemas are separate from SQLAlchemy models.
@@ -63,6 +65,7 @@ infrastructure/    # Terraform (Week 10)
 ```
 # create/activate venv, then:
 pip install -r requirements.txt
+cp .env.example .env                   # required: app won't start without DATABASE_URL and SECRET_KEY
 uvicorn app.main:app --reload          # run API, docs at /docs
 pytest                                  # run tests
 alembic revision --autogenerate -m "msg"
@@ -77,3 +80,7 @@ docker run --name ecom-db -e POSTGRES_PASSWORD=postgres -e POSTGRES_DB=ecom -p 5
 4. Check `docs/PROJECT_PLAN.md` for the current week's scope; do not jump ahead.
 5. Cost rule: **absolute cap ₹5,000 total; target ₹0-1,500.** Weeks 1-6 are local only (no Azure). Before suggesting or creating ANY Azure resource: use the cheapest SKU, check free/student eligibility and current price, state the expected cost, and wait for my approval. Prefer the Free F1 App Service tier with code deploy (see Budget plan in `docs/PROJECT_PLAN.md`). Cloud resources are temporary: tell me when to stop or destroy them, and remind me to log costs in `docs/azure-cost-log.md`. Budgets only alert, they do not stop spending.
 6. If scope or time is tight, suggest cutting features, not skipping tests or the cloud/DevOps parts.
+7. When I say a week is finished (e.g., “Week 2 done”), update both:
+- CLAUDE.md: set the current week, list what was completed, and note any scope that was cut. Do this in the same commit as the week’s final work.
+- README.md: the project status/progress section (a short list of finished weeks and what they deliver, plus setup or run instructions if they changed).
+Keep README.md written for a human reader (what the project is, how to run it, current progress). Do not put internal notes or AI instructions in it. Do both in the same commit as the week’s final work
