@@ -3,20 +3,20 @@
 from pydantic import BaseModel, Field
 
 
-class ProductCreate(BaseModel):
+class ProductBase(BaseModel):
+    """Fields and validation rules shared by product create and update requests."""
+
+    name: str = Field(min_length=1, max_length=100)
+    price: float = Field(gt=0)
+    description: str = Field(min_length=1, max_length=500)
+
+
+class ProductCreate(ProductBase):
     """Data a client supplies when creating a product."""
 
-    name: str = Field(min_length=1, max_length=100)
-    price: float = Field(gt=0)
-    description: str = Field(min_length=1, max_length=500)
 
-
-class ProductUpdate(BaseModel):
+class ProductUpdate(ProductBase):
     """Replacement data supplied when updating a product with PUT."""
-
-    name: str = Field(min_length=1, max_length=100)
-    price: float = Field(gt=0)
-    description: str = Field(min_length=1, max_length=500)
 
 
 class ProductResponse(BaseModel):

@@ -1,5 +1,16 @@
+# Python
 .venv/
 __pycache__/
-.pytest_cache/
 *.pyc
+.pytest_cache/
+.coverage
+
+# Environment files (secrets). Only the example is committed.
 .env
+.env.*
+!.env.example
+
+# Terraform (Week 10): never commit state or provider caches
+.terraform/
+*.tfstate
+*.tfstate.*

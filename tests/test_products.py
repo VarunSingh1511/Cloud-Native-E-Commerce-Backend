@@ -1,59 +1,36 @@
-"""Tests for Week 1 product endpoints."""
+"""Tests for the product endpoints."""
 
-import pytest
 from fastapi.testclient import TestClient
 
-from app.main import app
-from app.routers.products import reset_products
-
-client = TestClient(app)
+VALID_PRODUCT = {"name": "Mechanical Keyboard", "price": 3000, "description": "RGB keyboard"}
 
 
-@pytest.fixture(autouse=True)
-def restore_sample_products() -> None:
-    """Ensure each test starts with the same in-memory sample data."""
-    reset_products()
+# --- Success cases ---
 
 
-def test_root_endpoint() -> None:
-    response = client.get("/")
-
-    assert response.status_code == 200
-    assert response.json() == {"message": "Cloud E-Commerce API is running"}
-
-
-def test_get_all_products() -> None:
+def test_get_all_products(client: TestClient) -> None:
     response = client.get("/products")
 
     assert response.status_code == 200
     assert isinstance(response.json(), list)
-    assert len(response.json()) >= 2
+    assert len(response.json()) == 2
 
 
-def test_get_existing_product() -> None:
+def test_get_existing_product(client: TestClient) -> None:
     response = client.get("/products/1")
 
     assert response.status_code == 200
     assert response.json()["id"] == 1
 
 
-def test_get_nonexistent_product() -> None:
-    response = client.get("/products/99999")
-
-    assert response.status_code == 404
-    assert response.json()["detail"] == "Product not found"
-
-
-def test_create_product() -> None:
-    payload = {"name": "Mechanical Keyboard", "price": 3000, "description": "RGB keyboard"}
-
-    response = client.post("/products", json=payload)
+def test_create_product(client: TestClient) -> None:
+    response = client.post("/products", json=VALID_PRODUCT)
 
     assert response.status_code == 201
-    assert response.json() == {"id": 3, **payload}
+    assert response.json() == {"id": 3, **VALID_PRODUCT}
 
 
-def test_update_product() -> None:
+def test_update_product(client: TestClient) -> None:
     payload = {"name": "Updated Laptop", "price": 80000, "description": "Updated description"}
 
     response = client.put("/products/1", json=payload)
@@ -62,7 +39,7 @@ def test_update_product() -> None:
     assert response.json() == {"id": 1, **payload}
 
 
-def test_delete_product() -> None:
+def test_delete_product(client: TestClient) -> None:
     response = client.delete("/products/1")
 
     assert response.status_code == 200
@@ -70,10 +47,54 @@ def test_delete_product() -> None:
     assert client.get("/products/1").status_code == 404
 
 
-def test_invalid_product_is_rejected() -> None:
-    response = client.post(
-        "/products",
-        json={"name": "", "price": 0, "description": ""},
-    )
+# --- 404: product does not exist ---
+
+
+def test_get_nonexistent_product(client: TestClient) -> None:
+    response = client.get("/products/99999")
+
+    assert response.status_code == 404
+    assert response.json()["detail"] == "Product not found"
+
+
+def test_update_nonexistent_product(client: TestClient) -> None:
+    response = client.put("/products/99999", json=VALID_PRODUCT)
+
+    assert response.status_code == 404
+    assert response.json()["detail"] == "Product not found"
+
+
+def test_delete_nonexistent_product(client: TestClient) -> None:
+    response = client.delete("/products/99999")
+
+    assert response.status_code == 404
+    assert response.json()["detail"] == "Product not found"
+
+
+# --- 422: request fails validation ---
+
+
+def test_create_rejects_invalid_values(client: TestClient) -> None:
+    response = client.post("/products", json={"name": "", "price": 0, "description": ""})
+
+    assert response.status_code == 422
+
+
+def test_create_rejects_missing_field(client: TestClient) -> None:
+    response = client.post("/products", json={"name": "Keyboard", "price": 3000})
+
+    assert response.status_code == 422
+
+
+def test_update_rejects_negative_price(client: TestClient) -> None:
+    response = client.put("/products/1", json={**VALID_PRODUCT, "price": -5})
+
+    assert response.status_code == 422
+    # A rejected update must not change the stored product.
+    assert client.get("/products/1").json()["name"] == "Laptop"
+
+
+def test_non_integer_product_id_is_rejected(client: TestClient) -> None:
+    response = client.get("/products/abc")
 
     assert response.status_code == 422
