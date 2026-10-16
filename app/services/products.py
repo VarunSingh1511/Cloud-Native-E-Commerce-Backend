@@ -5,6 +5,7 @@ from decimal import Decimal
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from app.core.exceptions import NotFoundError
 from app.models.product import Product
 from app.schemas.product import ProductCreate, ProductUpdate
 
@@ -14,9 +15,12 @@ def list_products(db: Session) -> list[Product]:
     return list(db.scalars(select(Product).order_by(Product.id)))
 
 
-def get_product(db: Session, product_id: int) -> Product | None:
-    """Return one product by primary key, or None if it does not exist."""
-    return db.get(Product, product_id)
+def get_product(db: Session, product_id: int) -> Product:
+    """Return one product by primary key, or raise NotFoundError."""
+    product = db.get(Product, product_id)
+    if product is None:
+        raise NotFoundError("Product")
+    return product
 
 
 def create_product(db: Session, product_data: ProductCreate) -> Product:
@@ -32,11 +36,9 @@ def create_product(db: Session, product_data: ProductCreate) -> Product:
     return product
 
 
-def update_product(db: Session, product_id: int, product_data: ProductUpdate) -> Product | None:
-    """Replace a product's editable fields; return None if it does not exist."""
-    product = db.get(Product, product_id)
-    if product is None:
-        return None
+def update_product(db: Session, product_id: int, product_data: ProductUpdate) -> Product:
+    """Replace a product's editable fields."""
+    product = get_product(db, product_id)
     product.name = product_data.name
     product.description = product_data.description
     product.price = Decimal(str(product_data.price))
@@ -45,11 +47,8 @@ def update_product(db: Session, product_id: int, product_data: ProductUpdate) ->
     return product
 
 
-def delete_product(db: Session, product_id: int) -> bool:
-    """Delete a product; return False if it does not exist."""
-    product = db.get(Product, product_id)
-    if product is None:
-        return False
+def delete_product(db: Session, product_id: int) -> None:
+    """Delete a product."""
+    product = get_product(db, product_id)
     db.delete(product)
     db.commit()
-    return True
