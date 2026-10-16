@@ -1,20 +1,10 @@
 """Tests for the product endpoints, running against the test database."""
 
-from typing import Any
-
 from fastapi.testclient import TestClient
 from sqlalchemy.orm import Session
 
 from app.models.product import Product
-
-VALID_PRODUCT = {"name": "Mechanical Keyboard", "price": 3000, "description": "RGB keyboard"}
-
-
-def create_product(client: TestClient, **overrides: Any) -> dict[str, Any]:
-    """Create a product through the API and return the response body."""
-    response = client.post("/products", json={**VALID_PRODUCT, **overrides})
-    assert response.status_code == 201
-    return response.json()
+from tests.helpers import VALID_PRODUCT, create_product
 
 
 # --- Success cases ---

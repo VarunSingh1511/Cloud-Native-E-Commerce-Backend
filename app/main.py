@@ -3,6 +3,7 @@
 from fastapi import FastAPI
 
 from app.core.exceptions import AppError, app_error_handler
+from app.routers.categories import router as categories_router
 from app.routers.health import router as health_router
 from app.routers.products import router as products_router
 
@@ -17,3 +18,4 @@ app.add_exception_handler(AppError, app_error_handler)
 
 app.include_router(health_router)
 app.include_router(products_router)
+app.include_router(categories_router)
