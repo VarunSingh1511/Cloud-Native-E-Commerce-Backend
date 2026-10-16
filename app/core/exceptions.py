@@ -28,6 +28,12 @@ class NotFoundError(AppError):
         super().__init__(f"{resource} not found")
 
 
+class BadRequestError(AppError):
+    """The request body is well-formed but refers to something invalid (400)."""
+
+    status_code = 400
+
+
 class ConflictError(AppError):
     """The request clashes with existing data, e.g. a duplicate name (409)."""
 

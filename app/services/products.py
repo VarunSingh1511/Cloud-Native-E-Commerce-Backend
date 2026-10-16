@@ -5,9 +5,19 @@ from decimal import Decimal
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.core.exceptions import NotFoundError
+from app.core.exceptions import BadRequestError, NotFoundError
+from app.models.category import Category
 from app.models.product import Product
 from app.schemas.product import ProductCreate, ProductUpdate
+
+
+def _check_category_exists(db: Session, category_id: int | None) -> None:
+    """Reject a category_id that points to no category.
+
+    This is a 400 (bad request body), not a 404: the URL itself was valid.
+    """
+    if category_id is not None and db.get(Category, category_id) is None:
+        raise BadRequestError(f"Category {category_id} does not exist")
 
 
 def list_products(db: Session) -> list[Product]:
@@ -25,6 +35,7 @@ def get_product(db: Session, product_id: int) -> Product:
 
 def create_product(db: Session, product_data: ProductCreate) -> Product:
     """Insert a new product and return it with its database-generated ID."""
+    _check_category_exists(db, product_data.category_id)
     values = product_data.model_dump()
     # Convert via str so 19.99 becomes Decimal("19.99"), not a long binary float.
     values["price"] = Decimal(str(values["price"]))
@@ -39,9 +50,11 @@ def create_product(db: Session, product_data: ProductCreate) -> Product:
 def update_product(db: Session, product_id: int, product_data: ProductUpdate) -> Product:
     """Replace a product's editable fields."""
     product = get_product(db, product_id)
+    _check_category_exists(db, product_data.category_id)
     product.name = product_data.name
     product.description = product_data.description
     product.price = Decimal(str(product_data.price))
+    product.category_id = product_data.category_id
     db.commit()
     db.refresh(product)
     return product

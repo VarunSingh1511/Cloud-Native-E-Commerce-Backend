@@ -10,6 +10,8 @@ class ProductBase(BaseModel):
     # le: the largest value NUMERIC(10, 2) can store; larger values would make the DB fail.
     price: float = Field(gt=0, le=99_999_999.99)
     description: str = Field(min_length=1, max_length=500)
+    # Optional: a product does not have to belong to a category.
+    category_id: int | None = None
 
 
 class ProductCreate(ProductBase):
@@ -31,3 +33,4 @@ class ProductResponse(BaseModel):
     name: str
     price: float
     description: str
+    category_id: int | None

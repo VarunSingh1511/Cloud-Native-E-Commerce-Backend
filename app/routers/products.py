@@ -12,6 +12,7 @@ router = APIRouter(prefix="/products", tags=["Products"])
 
 # Shown in Swagger; the actual 404 comes from NotFoundError raised in the service.
 NOT_FOUND_RESPONSE = {404: {"description": "Product not found"}}
+BAD_CATEGORY_RESPONSE = {400: {"description": "category_id does not exist"}}
 
 
 @router.get("", response_model=list[ProductResponse], summary="List all products")
@@ -36,6 +37,7 @@ def get_product(product_id: int, db: Session = Depends(get_db)) -> Product:
     response_model=ProductResponse,
     status_code=status.HTTP_201_CREATED,
     summary="Create a product",
+    responses=BAD_CATEGORY_RESPONSE,
 )
 def create_product(product_data: ProductCreate, db: Session = Depends(get_db)) -> Product:
     """Create a product; the database assigns its ID."""
@@ -46,7 +48,7 @@ def create_product(product_data: ProductCreate, db: Session = Depends(get_db)) -
     "/{product_id}",
     response_model=ProductResponse,
     summary="Update a product",
-    responses=NOT_FOUND_RESPONSE,
+    responses={**NOT_FOUND_RESPONSE, **BAD_CATEGORY_RESPONSE},
 )
 def update_product(
     product_id: int, product_data: ProductUpdate, db: Session = Depends(get_db)
