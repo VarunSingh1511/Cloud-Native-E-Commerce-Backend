@@ -7,6 +7,7 @@ from sqlalchemy.orm import Session
 
 from app.core.exceptions import BadRequestError, NotFoundError
 from app.models.category import Category
+from app.models.inventory import Inventory
 from app.models.product import Product
 from app.schemas.product import ProductCreate, ProductUpdate
 
@@ -39,7 +40,9 @@ def create_product(db: Session, product_data: ProductCreate) -> Product:
     values = product_data.model_dump()
     # Convert via str so 19.99 becomes Decimal("19.99"), not a long binary float.
     values["price"] = Decimal(str(values["price"]))
-    product = Product(**values)
+    # Every product starts with a stock row of 0. Both rows are inserted by the
+    # same commit, so either both exist or neither does.
+    product = Product(**values, inventory=Inventory(quantity=0))
     db.add(product)
     db.commit()
     # Reload from the DB to get server-generated values (id, created_at).
