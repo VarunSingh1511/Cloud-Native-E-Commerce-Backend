@@ -143,3 +143,9 @@ def test_non_integer_product_id_is_rejected(client: TestClient) -> None:
     response = client.get("/products/abc")
 
     assert response.status_code == 422
+
+
+def test_create_rejects_price_above_database_limit(client: TestClient) -> None:
+    response = client.post("/products", json={**VALID_PRODUCT, "price": 100_000_000})
+
+    assert response.status_code == 422

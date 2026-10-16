@@ -7,7 +7,8 @@ class ProductBase(BaseModel):
     """Fields and validation rules shared by product create and update requests."""
 
     name: str = Field(min_length=1, max_length=100)
-    price: float = Field(gt=0)
+    # le: the largest value NUMERIC(10, 2) can store; larger values would make the DB fail.
+    price: float = Field(gt=0, le=99_999_999.99)
     description: str = Field(min_length=1, max_length=500)
 
 
