@@ -10,7 +10,7 @@ os.environ["DATABASE_URL"] = os.environ.get(
     "TEST_DATABASE_URL", "postgresql+psycopg://postgres:postgres@localhost:5432/ecom_test"
 )
 os.environ["ENVIRONMENT"] = "test"
-os.environ.setdefault("SECRET_KEY", "test-secret-key")
+os.environ.setdefault("SECRET_KEY", "test-secret-key-that-is-at-least-32-characters-long")
 
 from collections.abc import Iterator
 from pathlib import Path
