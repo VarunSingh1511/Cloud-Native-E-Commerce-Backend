@@ -1,6 +1,6 @@
 """Request and response schemas for products."""
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 
 class ProductBase(BaseModel):
@@ -20,7 +20,11 @@ class ProductUpdate(ProductBase):
 
 
 class ProductResponse(BaseModel):
-    """Product data returned by the API, including its application-generated ID."""
+    """Product data returned by the API, including its database-generated ID."""
+
+    # Lets Pydantic read attributes from SQLAlchemy objects (product.name),
+    # not only from dicts. The NUMERIC price from the DB is returned as a float.
+    model_config = ConfigDict(from_attributes=True)
 
     id: int = Field(gt=0)
     name: str
