@@ -10,7 +10,7 @@ os.environ["DATABASE_URL"] = os.environ.get(
     "TEST_DATABASE_URL", "postgresql+psycopg://postgres:postgres@localhost:5432/ecom_test"
 )
 os.environ["ENVIRONMENT"] = "test"
-os.environ.setdefault("SECRET_KEY", "test-secret-key")
+os.environ.setdefault("SECRET_KEY", "test-secret-key-that-is-at-least-32-characters-long")
 
 from collections.abc import Iterator
 from pathlib import Path
@@ -22,10 +22,16 @@ from fastapi.testclient import TestClient
 from sqlalchemy.exc import OperationalError
 from sqlalchemy.orm import Session
 
+from app.core.security import create_access_token, hash_password
 from app.db.session import engine, get_db
 from app.main import app
+from app.models.user import User, UserRole
+from tests.helpers import PASSWORD, bearer
 
 ALEMBIC_INI = Path(__file__).resolve().parent.parent / "alembic.ini"
+
+# Argon2 is deliberately slow, so hash the shared test password only once.
+_PASSWORD_HASH = hash_password(PASSWORD)
 
 
 @pytest.fixture(scope="session", autouse=True)
@@ -64,8 +70,8 @@ def db_session() -> Iterator[Session]:
 
 
 @pytest.fixture
-def client(db_session: Session) -> Iterator[TestClient]:
-    """Provide a test client whose requests use the test's rolled-back session."""
+def use_test_session(db_session: Session) -> Iterator[None]:
+    """Make every request in this test use the test's rolled-back session."""
 
     def override_get_db() -> Iterator[Session]:
         yield db_session
@@ -73,6 +79,36 @@ def client(db_session: Session) -> Iterator[TestClient]:
     # Dependency override: wherever an endpoint asks for get_db, FastAPI
     # calls override_get_db instead.
     app.dependency_overrides[get_db] = override_get_db
+    yield
+    app.dependency_overrides.clear()
+
+
+@pytest.fixture
+def client(use_test_session: None) -> Iterator[TestClient]:
+    """An anonymous (not logged in) test client."""
     with TestClient(app) as test_client:
         yield test_client
-    app.dependency_overrides.clear()
+
+
+def _client_logged_in_as(db_session: Session, email: str, role: UserRole) -> TestClient:
+    """Create a user directly in the test DB and return a client sending its token."""
+    user = User(email=email, hashed_password=_PASSWORD_HASH, role=role)
+    db_session.add(user)
+    db_session.commit()
+    return TestClient(app, headers=bearer(create_access_token(user.id)))
+
+
+@pytest.fixture
+def admin_client(use_test_session: None, db_session: Session) -> Iterator[TestClient]:
+    """A test client logged in as an ADMIN user."""
+    with _client_logged_in_as(db_session, "admin@example.com", UserRole.ADMIN) as test_client:
+        yield test_client
+
+
+@pytest.fixture
+def customer_client(use_test_session: None, db_session: Session) -> Iterator[TestClient]:
+    """A test client logged in as a CUSTOMER user."""
+    with _client_logged_in_as(
+        db_session, "customer@example.com", UserRole.CUSTOMER
+    ) as test_client:
+        yield test_client

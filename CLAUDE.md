@@ -4,10 +4,11 @@ Project: **Cloud-Native E-Commerce Platform** (college mini project, Cloud Compu
 Full plan: `docs/PROJECT_PLAN.md`. Read it before planning any week's work.
 
 ## Current status
-- **Current week: 4** (Authentication + RBAC). Branch `week-4-auth`.
+- **Current week: 5** (Cart + Orders, heaviest week). Branch `week-5-orders`.
 - Week 1 done: in-memory product CRUD API.
 - Week 2 done (see "Week 2 summary").
 - Week 3 done (see "Week 3 summary").
+- Week 4 done (see "Week 4 summary").
 - Update this section when a week is finished.
 
 ## Priorities (in order)
@@ -90,6 +91,37 @@ Completed:
 Scope cut or deferred: no category update/delete endpoints, which the plan didn't require. Category names are unique case-sensitively. Write endpoints are not yet admin-only (Week 4).
 Note: Docker Desktop must be started before `docker start ecom-db`. It is installed per-user under `%LOCALAPPDATA%\Programs\DockerDesktop`.
 
+## Week 4 summary (branch `week-4-auth`)
+Completed:
+- New libraries, approved by the owner: `argon2-cffi`, `pyjwt`, `python-multipart` (OAuth2 login form) and `email-validator` (`EmailStr`).
+- Settings:
+  - `SECRET_KEY` is a `SecretStr` with `min_length=32`. The app refuses to start otherwise, and the `.env.example` placeholder `change-me` is too short on purpose.
+  - New `ACCESS_TOKEN_EXPIRE_MINUTES`, default 30.
+  - The owner's local `.env` was given a generated 43-character key.
+- `core/security.py`: Argon2id `hash_password`/`verify_password`. HS256 `create_access_token` (claims `sub`, `iat`, `exp`; no role) and `decode_access_token`, which accepts only HS256 and raises `UnauthorizedError` ("Token has expired" or "Could not validate credentials").
+- `core/exceptions.py`:
+  - `UnauthorizedError` (401, with the `WWW-Authenticate: Bearer` header) and `ForbiddenError` (403)
+  - `AppError` now has `headers`
+- `core/dependencies.py`:
+  - `oauth2_scheme` (`OAuth2PasswordBearer`, `tokenUrl=/auth/login`)
+  - `get_current_user` loads the user from the DB on every request
+  - `require_admin` raises 403 "Admin access required"
+  - `ADMIN_ONLY_RESPONSES` documents these in Swagger
+- Endpoints:
+  - `POST /auth/register` always creates a CUSTOMER and has no role field. Emails are lowercased, and a duplicate returns 409.
+  - `POST /auth/login` takes the OAuth2 form (`username` = email). Unknown email and wrong password give the same 401, with a dummy-hash check so timing matches.
+  - `GET /users/me`
+- Admin-only via `dependencies=[Depends(require_admin)]`: POST/PUT/DELETE products, POST categories, PUT inventory. Reads stay public.
+- `python -m app.scripts.create_admin <email>` uses a hidden `getpass` prompt, and promotes the user if they already exist.
+- Tests: 92 pass.
+  - Fixtures: `client` (anonymous), `admin_client` and `customer_client`, which create the user directly with a pre-computed hash and send a token.
+  - New files: `test_security.py`, `test_auth.py`, `test_permissions.py` (parametrised over all 5 write endpoints), `test_create_admin.py`.
+  - Catalog tests now use `admin_client`.
+- Docs: new `docs/security.md` (flow, decisions, attack/defence table, known limitations).
+- No migration: `users` already had every column, and `alembic check` is clean.
+
+Scope cut or deferred, as planned: no refresh tokens, logout, token revocation, login rate limiting, email verification or password reset. Role changes happen only through the `create_admin` command. These are listed as known limitations in `docs/security.md`.
+
 ## Conventions
 - Type hints on all functions. Pydantic schemas are separate from SQLAlchemy models.
 - Routers stay thin; business logic goes in `services/`. DB access via a session dependency (`get_db`).
@@ -114,6 +146,7 @@ uvicorn app.main:app --reload          # run API, docs at /docs
 pytest                                  # run tests (needs ecom-db running; uses ecom_test)
 alembic revision --autogenerate -m "msg"   # then review the generated file before committing
 alembic check                           # confirm models and migrations match
+python -m app.scripts.create_admin you@example.com   # create/promote an admin (hidden password prompt)
 ```
 
 ## Workflow instructions for Claude

@@ -29,7 +29,10 @@ users   (no relationships yet; carts and orders link to users in Week 5)
 | `role` | enum `user_role` (`CUSTOMER`, `ADMIN`) | not null, default `CUSTOMER` (set by the app) |
 | `created_at` | timestamptz | not null, default `now()` |
 
-The table exists so the schema is complete, but it is not used until authentication in Week 4. Only password hashes are stored, never plain passwords.
+Used for login since Week 4 (see `docs/security.md`).
+- Only Argon2 password hashes are stored, never plain passwords.
+- Emails are saved in lowercase, so the unique index also blocks duplicates that differ only in letter case.
+- No migration was needed for authentication, because this table already had every column.
 
 ### `categories`
 | Column | Type | Constraints |
@@ -66,7 +69,7 @@ The table exists so the schema is complete, but it is not used until authenticat
 - **`ON DELETE CASCADE` for inventory.** A stock row has no meaning without its product, so it is removed with it.
 - **Index on `products.category_id`.** PostgreSQL indexes primary keys and unique columns automatically, but not foreign keys. This index keeps "products in category X" queries fast, which is the `?category_id=` filter on `GET /products`.
 - **Duplicate names are detected by the database.** Creating a category catches the unique constraint's error and returns 409. Checking with a SELECT first would not be safe if two requests create the same name at the same moment.
-- **Unique index on `users.email`.** It prevents duplicate accounts and speeds up the login lookup.
+- **Unique index on `users.email`.** It prevents duplicate accounts and speeds up the login lookup. A duplicate registration is caught from this index and returns 409, the same pattern as category names.
 - **Named constraints.** A naming convention in `app/db/base.py` gives every constraint a predictable name (for example `fk_products_category_id_categories`), so later migrations can alter or drop them reliably.
 
 ## Week 5 draft: cart and orders

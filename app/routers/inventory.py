@@ -3,6 +3,7 @@
 from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
 
+from app.core.dependencies import ADMIN_ONLY_RESPONSES, require_admin
 from app.db.session import get_db
 from app.models.inventory import Inventory
 from app.schemas.inventory import InventoryResponse, InventoryUpdate
@@ -28,7 +29,8 @@ def get_inventory(product_id: int, db: Session = Depends(get_db)) -> Inventory:
     "/{product_id}",
     response_model=InventoryResponse,
     summary="Set a product's stock level",
-    responses=NOT_FOUND_RESPONSE,
+    responses={**NOT_FOUND_RESPONSE, **ADMIN_ONLY_RESPONSES},
+    dependencies=[Depends(require_admin)],
 )
 def set_inventory(
     product_id: int, inventory_data: InventoryUpdate, db: Session = Depends(get_db)

@@ -3,6 +3,7 @@
 from fastapi import APIRouter, Depends, status
 from sqlalchemy.orm import Session
 
+from app.core.dependencies import ADMIN_ONLY_RESPONSES, require_admin
 from app.db.session import get_db
 from app.models.category import Category
 from app.schemas.category import CategoryCreate, CategoryResponse
@@ -33,7 +34,11 @@ def get_category(category_id: int, db: Session = Depends(get_db)) -> Category:
     response_model=CategoryResponse,
     status_code=status.HTTP_201_CREATED,
     summary="Create a category",
-    responses={409: {"description": "A category with this name already exists"}},
+    responses={
+        409: {"description": "A category with this name already exists"},
+        **ADMIN_ONLY_RESPONSES,
+    },
+    dependencies=[Depends(require_admin)],
 )
 def create_category(category_data: CategoryCreate, db: Session = Depends(get_db)) -> Category:
     """Create a category with a unique name."""

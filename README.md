@@ -17,6 +17,10 @@ A cloud-native e-commerce backend built with FastAPI, developed as a Cloud Compu
   - `GET /products` supports paging, a category filter and name search.
   - The database enforces `price > 0` and `quantity >= 0`.
   - Errors use one consistent format.
+- **Week 4: Authentication and roles.**
+  - Users register and log in to get a JWT access token. Passwords are hashed with Argon2.
+  - Two roles: customers can browse, and only admins can change the catalog and stock.
+  - A command creates the first admin.
 
 ## Technology
 
@@ -25,6 +29,7 @@ A cloud-native e-commerce backend built with FastAPI, developed as a Cloud Compu
 - Pydantic and pydantic-settings
 - PostgreSQL 16 (run locally in Docker)
 - SQLAlchemy 2.0 and Alembic
+- Argon2 (password hashing) and PyJWT (access tokens)
 - pytest
 
 ## Project structure
@@ -33,16 +38,20 @@ A cloud-native e-commerce backend built with FastAPI, developed as a Cloud Compu
 app/
 ├── main.py                 # Creates the FastAPI app, registers routers and error handling
 ├── core/config.py          # Settings loaded from environment variables
-├── core/exceptions.py      # Application errors (404, 400, 409) and their handler
+├── core/exceptions.py      # Application errors (400, 401, 403, 404, 409) and their handler
+├── core/security.py        # Password hashing and access tokens
+├── core/dependencies.py    # get_current_user and require_admin
 ├── db/base.py              # SQLAlchemy declarative base
 ├── db/session.py           # Database engine and the get_db session dependency
 ├── models/                 # SQLAlchemy models: users, categories, products, inventory
 ├── schemas/                # Pydantic request and response schemas
 ├── services/               # Business logic and database operations
-└── routers/                # REST endpoints: health, products, categories, inventory
+├── routers/                # REST endpoints: health, auth, users, products, categories, inventory
+└── scripts/create_admin.py # Command that creates the first admin user
 alembic/versions/           # Database migrations
 tests/                      # pytest suite (conftest.py holds shared fixtures)
 docs/database-design.md     # Tables, relationships and design decisions
+docs/security.md            # How authentication and roles work
 .env.example                # Template for local environment variables
 ```
 
@@ -78,13 +87,20 @@ pip install -r requirements.txt
 cp .env.example .env
 ```
 
-The app reads its configuration from environment variables, or from `.env` if present. `DATABASE_URL` and `SECRET_KEY` are required and the app will not start without them. `.env` is git-ignored and must never be committed.
+Then replace `SECRET_KEY` in `.env` with a random value of your own:
+
+```bash
+python -c "import secrets; print(secrets.token_urlsafe(32))"
+```
+
+The app reads its configuration from environment variables, or from `.env` if present. `DATABASE_URL` and `SECRET_KEY` are required, and `SECRET_KEY` must be at least 32 characters. The app will not start otherwise. `.env` is git-ignored and must never be committed.
 
 | Variable | Purpose |
 | -------- | ------- |
 | `ENVIRONMENT` | `development`, `test` or `production` |
 | `DATABASE_URL` | PostgreSQL connection string |
-| `SECRET_KEY` | Secret used for signing tokens |
+| `SECRET_KEY` | Secret used for signing login tokens (at least 32 characters) |
+| `ACCESS_TOKEN_EXPIRE_MINUTES` | Optional; how long a login token is valid (default 30) |
 
 ### 3. PostgreSQL (Docker)
 
@@ -107,6 +123,16 @@ alembic upgrade head
 
 This applies every migration in `alembic/versions/` to the database in `DATABASE_URL`. Run it again whenever new migrations are added.
 
+### 5. Create an admin user
+
+Anyone can register as a customer through the API, but only an admin can change the catalog. Create the first admin from the command line:
+
+```bash
+python -m app.scripts.create_admin admin@example.com
+```
+
+You will be asked for a password twice; nothing is shown as you type. If the email already belongs to a user, that user is promoted to admin instead.
+
 ## Run the API
 
 ```bash
@@ -125,22 +151,36 @@ http://127.0.0.1:8000/docs
 
 The OpenAPI specification is available at `http://127.0.0.1:8000/openapi.json`.
 
+**Logging in from Swagger:**
+1. Click **Authorize** at the top of the page.
+2. Enter your email as the *username*, and your password.
+3. Click **Authorize** again.
+
+Swagger then sends your token with every request. Endpoints marked with a lock need a login.
+
 ## Endpoints
 
-| Method | Endpoint                  | Description                                  |
-| ------ | ------------------------- | -------------------------------------------- |
-| GET    | `/`                       | Check that the API is running                |
-| GET    | `/health`                 | Health check for containers and cloud        |
-| GET    | `/products`               | List products (paged, filterable)            |
-| GET    | `/products/{id}`          | Get one product                              |
-| POST   | `/products`               | Create a product (starts with 0 in stock)    |
-| PUT    | `/products/{id}`          | Replace a product                            |
-| DELETE | `/products/{id}`          | Delete a product and its stock record        |
-| GET    | `/categories`             | List categories                              |
-| GET    | `/categories/{id}`        | Get one category                             |
-| POST   | `/categories`             | Create a category (names must be unique)     |
-| GET    | `/inventory/{product_id}` | Get a product's stock level                  |
-| PUT    | `/inventory/{product_id}` | Set a product's stock level                  |
+Access: **public** means no login is needed, **user** means any logged-in user, and **admin** means only admins.
+
+| Method | Endpoint                  | Access | Description                                  |
+| ------ | ------------------------- | ------ | -------------------------------------------- |
+| GET    | `/`                       | public | Check that the API is running                |
+| GET    | `/health`                 | public | Health check for containers and cloud        |
+| POST   | `/auth/register`          | public | Create a customer account                    |
+| POST   | `/auth/login`             | public | Log in (form fields `username`, `password`) and get a token |
+| GET    | `/users/me`               | user   | Get the logged-in account                    |
+| GET    | `/products`               | public | List products (paged, filterable)            |
+| GET    | `/products/{id}`          | public | Get one product                              |
+| POST   | `/products`               | admin  | Create a product (starts with 0 in stock)    |
+| PUT    | `/products/{id}`          | admin  | Replace a product                            |
+| DELETE | `/products/{id}`          | admin  | Delete a product and its stock record        |
+| GET    | `/categories`             | public | List categories                              |
+| GET    | `/categories/{id}`        | public | Get one category                             |
+| POST   | `/categories`             | admin  | Create a category (names must be unique)     |
+| GET    | `/inventory/{product_id}` | public | Get a product's stock level                  |
+| PUT    | `/inventory/{product_id}` | admin  | Set a product's stock level                  |
+
+To call protected endpoints outside Swagger, send the token from `/auth/login` in a header: `Authorization: Bearer <token>`. Tokens expire after 30 minutes; log in again to get a new one.
 
 `GET /products` accepts these optional query parameters:
 
@@ -158,6 +198,8 @@ Errors return JSON in the form `{"detail": "..."}`:
 | Status | Meaning |
 | ------ | ------- |
 | 400 | The request refers to something that does not exist, e.g. an unknown `category_id` |
+| 401 | Not logged in, wrong email or password, or the token is invalid or expired |
+| 403 | Logged in, but not allowed, e.g. a customer trying to change a product |
 | 404 | The resource in the URL does not exist |
 | 409 | The request conflicts with existing data, e.g. a duplicate category name |
 | 422 | The request failed validation, e.g. a negative price or quantity |
