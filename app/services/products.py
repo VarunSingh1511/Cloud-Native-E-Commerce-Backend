@@ -21,9 +21,28 @@ def _check_category_exists(db: Session, category_id: int | None) -> None:
         raise BadRequestError(f"Category {category_id} does not exist")
 
 
-def list_products(db: Session) -> list[Product]:
-    """Return all products, oldest first."""
-    return list(db.scalars(select(Product).order_by(Product.id)))
+def list_products(
+    db: Session,
+    skip: int = 0,
+    limit: int = 20,
+    category_id: int | None = None,
+    q: str | None = None,
+) -> list[Product]:
+    """Return one page of products, oldest first, optionally filtered.
+
+    Filters are added to a single SELECT only when given, so PostgreSQL does the
+    filtering and paging instead of Python.
+    """
+    query = select(Product)
+    if category_id is not None:
+        query = query.where(Product.category_id == category_id)
+    if q:
+        # Case-insensitive "name contains q" (ILIKE '%q%'). autoescape makes % and _
+        # in the search text match literally instead of acting as wildcards.
+        query = query.where(Product.name.icontains(q, autoescape=True))
+    # A stable order is required for paging; otherwise pages could overlap.
+    query = query.order_by(Product.id).offset(skip).limit(limit)
+    return list(db.scalars(query))
 
 
 def get_product(db: Session, product_id: int) -> Product:

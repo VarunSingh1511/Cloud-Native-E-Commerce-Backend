@@ -1,6 +1,6 @@
 """Product REST endpoints backed by PostgreSQL."""
 
-from fastapi import APIRouter, Depends, status
+from fastapi import APIRouter, Depends, Query, status
 from sqlalchemy.orm import Session
 
 from app.db.session import get_db
@@ -15,10 +15,20 @@ NOT_FOUND_RESPONSE = {404: {"description": "Product not found"}}
 BAD_CATEGORY_RESPONSE = {400: {"description": "category_id does not exist"}}
 
 
-@router.get("", response_model=list[ProductResponse], summary="List all products")
-def get_products(db: Session = Depends(get_db)) -> list[Product]:
-    """Return every product in the database."""
-    return product_service.list_products(db)
+@router.get("", response_model=list[ProductResponse], summary="List products")
+def get_products(
+    skip: int = Query(0, ge=0, description="Number of products to skip (for paging)"),
+    limit: int = Query(20, ge=1, le=100, description="Maximum number of products to return"),
+    category_id: int | None = Query(None, description="Only products in this category"),
+    q: str | None = Query(
+        None, min_length=1, max_length=100, description="Case-insensitive name search"
+    ),
+    db: Session = Depends(get_db),
+) -> list[Product]:
+    """Return one page of products, optionally filtered by category and name."""
+    return product_service.list_products(
+        db, skip=skip, limit=limit, category_id=category_id, q=q
+    )
 
 
 @router.get(
