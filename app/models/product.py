@@ -4,7 +4,7 @@ from datetime import datetime
 from decimal import Decimal
 from typing import TYPE_CHECKING
 
-from sqlalchemy import DateTime, ForeignKey, Numeric, String, func
+from sqlalchemy import CheckConstraint, DateTime, ForeignKey, Numeric, String, func
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db.base import Base
@@ -16,6 +16,9 @@ if TYPE_CHECKING:
 
 class Product(Base):
     __tablename__ = "products"
+    # Enforced by PostgreSQL itself, even for data that bypasses the API.
+    # The naming convention turns this into "ck_products_price_positive".
+    __table_args__ = (CheckConstraint("price > 0", name="price_positive"),)
 
     id: Mapped[int] = mapped_column(primary_key=True)
     name: Mapped[str] = mapped_column(String(100))
