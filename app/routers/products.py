@@ -3,6 +3,7 @@
 from fastapi import APIRouter, Depends, Query, status
 from sqlalchemy.orm import Session
 
+from app.core.dependencies import ADMIN_ONLY_RESPONSES, require_admin
 from app.db.session import get_db
 from app.models.product import Product
 from app.schemas.product import ProductCreate, ProductResponse, ProductUpdate
@@ -47,7 +48,8 @@ def get_product(product_id: int, db: Session = Depends(get_db)) -> Product:
     response_model=ProductResponse,
     status_code=status.HTTP_201_CREATED,
     summary="Create a product",
-    responses=BAD_CATEGORY_RESPONSE,
+    responses={**BAD_CATEGORY_RESPONSE, **ADMIN_ONLY_RESPONSES},
+    dependencies=[Depends(require_admin)],
 )
 def create_product(product_data: ProductCreate, db: Session = Depends(get_db)) -> Product:
     """Create a product; the database assigns its ID."""
@@ -58,7 +60,8 @@ def create_product(product_data: ProductCreate, db: Session = Depends(get_db)) -
     "/{product_id}",
     response_model=ProductResponse,
     summary="Update a product",
-    responses={**NOT_FOUND_RESPONSE, **BAD_CATEGORY_RESPONSE},
+    responses={**NOT_FOUND_RESPONSE, **BAD_CATEGORY_RESPONSE, **ADMIN_ONLY_RESPONSES},
+    dependencies=[Depends(require_admin)],
 )
 def update_product(
     product_id: int, product_data: ProductUpdate, db: Session = Depends(get_db)
@@ -67,7 +70,12 @@ def update_product(
     return product_service.update_product(db, product_id, product_data)
 
 
-@router.delete("/{product_id}", summary="Delete a product", responses=NOT_FOUND_RESPONSE)
+@router.delete(
+    "/{product_id}",
+    summary="Delete a product",
+    responses={**NOT_FOUND_RESPONSE, **ADMIN_ONLY_RESPONSES},
+    dependencies=[Depends(require_admin)],
+)
 def delete_product(product_id: int, db: Session = Depends(get_db)) -> dict[str, str]:
     """Remove one product from the database."""
     product_service.delete_product(db, product_id)

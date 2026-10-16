@@ -14,6 +14,12 @@ from app.models.user import User, UserRole
 # button where to log in.
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/auth/login")
 
+# Swagger documentation for endpoints protected by require_admin.
+ADMIN_ONLY_RESPONSES = {
+    401: {"description": "Not logged in, or the token is invalid or expired"},
+    403: {"description": "Admin access required"},
+}
+
 
 def get_current_user(
     token: str = Depends(oauth2_scheme), db: Session = Depends(get_db)
