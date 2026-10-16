@@ -10,7 +10,10 @@ from app.core.config import settings
 # The engine manages a pool of connections to PostgreSQL; create it once per app.
 # pool_pre_ping checks a connection is still alive before using it, which avoids
 # errors after the database restarts or drops idle connections (common in the cloud).
-engine = create_engine(settings.database_url, pool_pre_ping=True)
+# connect_timeout (seconds) makes an unreachable database fail fast instead of hanging.
+engine = create_engine(
+    settings.database_url, pool_pre_ping=True, connect_args={"connect_timeout": 5}
+)
 
 # A factory that creates Session objects. A session is a short-lived unit of work:
 # it tracks the objects you load or add, and sends changes to the DB on commit().

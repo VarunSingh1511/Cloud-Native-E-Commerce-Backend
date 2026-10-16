@@ -2,11 +2,10 @@
 
 from logging.config import fileConfig
 
-from sqlalchemy import create_engine, pool
-
 from alembic import context
 from app.core.config import settings
 from app.db.base import Base
+from app.db.session import engine
 
 # Importing the models package registers every table on Base.metadata.
 import app.models  # noqa: F401
@@ -35,9 +34,8 @@ def run_migrations_offline() -> None:
 
 def run_migrations_online() -> None:
     """Connect to the database from DATABASE_URL and apply migrations."""
-    connectable = create_engine(settings.database_url, poolclass=pool.NullPool)
-
-    with connectable.connect() as connection:
+    # Reuse the app's engine so migrations use the same URL and connection settings.
+    with engine.connect() as connection:
         context.configure(connection=connection, target_metadata=target_metadata)
 
         with context.begin_transaction():
