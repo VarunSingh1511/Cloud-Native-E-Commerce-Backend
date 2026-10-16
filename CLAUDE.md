@@ -4,8 +4,9 @@ Project: **Cloud-Native E-Commerce Platform** (college mini project, Cloud Compu
 Full plan: `docs/PROJECT_PLAN.md`. Read it before planning any week's work.
 
 ## Current status
-- **Current week: 2** (Week 1 done: in-memory product CRUD API)
-- Week 1 refactor done (see "Week 1 refactor"). Next: PostgreSQL + SQLAlchemy + Alembic on branch `week-2-database`.
+- **Current week: 3** (Products + Categories + Inventory). Branch `week-3-catalog`.
+- Week 1 done: in-memory product CRUD API.
+- Week 2 done (see "Week 2 summary").
 - Update this section when a week is finished.
 
 ## Priorities (in order)
@@ -48,7 +49,20 @@ infrastructure/    # Terraform (Week 10)
 - [x] Add type hints everywhere
 - [x] Confirm `/docs` still works and all tests pass before moving on
 
-Notes: tests set env vars in `tests/conftest.py`, so they don't need `.env`. The in-memory product list still lives in the router; it is replaced by the DB in the next step.
+Notes: tests set env vars in `tests/conftest.py`, so they don't need `.env`.
+
+## Week 2 summary (branch `week-2-database`)
+Completed:
+- PostgreSQL 16 in Docker (`ecom` for dev, `ecom_test` for tests). Port 5432; the native `postgresql-x64-18` Windows service on this machine is set to Manual and must stay stopped, or it takes the port.
+- `db/base.py` (DeclarativeBase + constraint naming convention), `db/session.py` (engine with `pool_pre_ping` and 5 s `connect_timeout`, `SessionLocal`, `get_db`).
+- Models: `users` (role enum `user_role`), `categories`, `products` (`NUMERIC(10,2)` price, nullable `category_id` FK SET NULL, indexed), `inventory` (PK = FK to products, CASCADE).
+- Alembic: `env.py` reuses the app engine/settings (no URL in `alembic.ini`). Initial migration `fadf75fe9183`; its downgrade also drops the `user_role` enum type. upgrade/downgrade/upgrade and `alembic check` are clean.
+- Products are DB-backed: queries in `services/products.py`, thin router. API contract unchanged (price stays float in the API).
+- Tests: `conftest.py` forces `DATABASE_URL` to `ecom_test` (override with `TEST_DATABASE_URL`), runs `alembic upgrade head` once per run, and rolls back each test (`join_transaction_mode="create_savepoint"`). 17 tests pass.
+- `docs/database-design.md` started.
+
+Deferred by plan (not cut): CHECK constraints, category/inventory endpoints (Week 3); user endpoints and hashing (Week 4).
+Open item: Starlette deprecation warning about `httpx` in `TestClient` (suggests `httpx2`); not addressed because it means a new library.
 
 ## Conventions
 - Type hints on all functions. Pydantic schemas are separate from SQLAlchemy models.
@@ -66,11 +80,14 @@ Notes: tests set env vars in `tests/conftest.py`, so they don't need `.env`. The
 # create/activate venv, then:
 pip install -r requirements.txt
 cp .env.example .env                   # required: app won't start without DATABASE_URL and SECRET_KEY
-uvicorn app.main:app --reload          # run API, docs at /docs
-pytest                                  # run tests
-alembic revision --autogenerate -m "msg"
-alembic upgrade head
 docker run --name ecom-db -e POSTGRES_PASSWORD=postgres -e POSTGRES_DB=ecom -p 5432:5432 -d postgres:16   # local DB until Week 6 Compose
+docker exec ecom-db createdb -U postgres ecom_test   # one-time: test database
+docker start ecom-db                    # later sessions
+alembic upgrade head                    # apply migrations to DATABASE_URL
+uvicorn app.main:app --reload          # run API, docs at /docs
+pytest                                  # run tests (needs ecom-db running; uses ecom_test)
+alembic revision --autogenerate -m "msg"   # then review the generated file before committing
+alembic check                           # confirm models and migrations match
 ```
 
 ## Workflow instructions for Claude
