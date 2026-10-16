@@ -10,6 +10,13 @@ A cloud-native e-commerce backend built with FastAPI, developed as a Cloud Compu
   - Configuration comes from environment variables.
   - Adds a `/health` endpoint.
   - Tests run against a separate test database.
+- **Week 3: Catalog and inventory.**
+  - Categories, with duplicate names rejected.
+  - Products can belong to a category.
+  - Every product has a stock level that can be read and set.
+  - `GET /products` supports paging, a category filter and name search.
+  - The database enforces `price > 0` and `quantity >= 0`.
+  - Errors use one consistent format.
 
 ## Technology
 
@@ -24,15 +31,15 @@ A cloud-native e-commerce backend built with FastAPI, developed as a Cloud Compu
 
 ```text
 app/
-├── main.py                 # Creates the FastAPI app and registers routers
+├── main.py                 # Creates the FastAPI app, registers routers and error handling
 ├── core/config.py          # Settings loaded from environment variables
+├── core/exceptions.py      # Application errors (404, 400, 409) and their handler
 ├── db/base.py              # SQLAlchemy declarative base
 ├── db/session.py           # Database engine and the get_db session dependency
 ├── models/                 # SQLAlchemy models: users, categories, products, inventory
-├── schemas/product.py      # Pydantic request and response schemas
-├── services/products.py    # Product database operations
-├── routers/health.py       # GET / and GET /health
-└── routers/products.py     # Product REST endpoints
+├── schemas/                # Pydantic request and response schemas
+├── services/               # Business logic and database operations
+└── routers/                # REST endpoints: health, products, categories, inventory
 alembic/versions/           # Database migrations
 tests/                      # pytest suite (conftest.py holds shared fixtures)
 docs/database-design.md     # Tables, relationships and design decisions
@@ -88,7 +95,7 @@ docker run --name ecom-db -e POSTGRES_PASSWORD=postgres -e POSTGRES_DB=ecom -p 5
 docker exec ecom-db createdb -U postgres ecom_test
 ```
 
-These are local development credentials only. Later, start the existing container with `docker start ecom-db`.
+These are local development credentials only. In later sessions, open Docker Desktop first, then start the existing container with `docker start ecom-db`.
 
 > If you also have PostgreSQL installed natively, it may already be using port 5432. Stop that service first, or the app will connect to the wrong server and fail with "password authentication failed".
 
@@ -120,15 +127,40 @@ The OpenAPI specification is available at `http://127.0.0.1:8000/openapi.json`.
 
 ## Endpoints
 
-| Method | Endpoint         | Description                           |
-| ------ | ---------------- | ------------------------------------- |
-| GET    | `/`              | Check that the API is running         |
-| GET    | `/health`        | Health check for containers and cloud |
-| GET    | `/products`      | List products                         |
-| GET    | `/products/{id}` | Get one product                       |
-| POST   | `/products`      | Create a product                      |
-| PUT    | `/products/{id}` | Replace a product                     |
-| DELETE | `/products/{id}` | Delete a product                      |
+| Method | Endpoint                  | Description                                  |
+| ------ | ------------------------- | -------------------------------------------- |
+| GET    | `/`                       | Check that the API is running                |
+| GET    | `/health`                 | Health check for containers and cloud        |
+| GET    | `/products`               | List products (paged, filterable)            |
+| GET    | `/products/{id}`          | Get one product                              |
+| POST   | `/products`               | Create a product (starts with 0 in stock)    |
+| PUT    | `/products/{id}`          | Replace a product                            |
+| DELETE | `/products/{id}`          | Delete a product and its stock record        |
+| GET    | `/categories`             | List categories                              |
+| GET    | `/categories/{id}`        | Get one category                             |
+| POST   | `/categories`             | Create a category (names must be unique)     |
+| GET    | `/inventory/{product_id}` | Get a product's stock level                  |
+| PUT    | `/inventory/{product_id}` | Set a product's stock level                  |
+
+`GET /products` accepts these optional query parameters:
+
+| Parameter     | Default | Description                                   |
+| ------------- | ------- | --------------------------------------------- |
+| `skip`        | `0`     | Number of products to skip                    |
+| `limit`       | `20`    | Products per page (1 to 100)                  |
+| `category_id` |         | Only products in this category                |
+| `q`           |         | Case-insensitive search in the product name   |
+
+Example: `GET /products?category_id=1&q=laptop&skip=0&limit=10`
+
+Errors return JSON in the form `{"detail": "..."}`:
+
+| Status | Meaning |
+| ------ | ------- |
+| 400 | The request refers to something that does not exist, e.g. an unknown `category_id` |
+| 404 | The resource in the URL does not exist |
+| 409 | The request conflicts with existing data, e.g. a duplicate category name |
+| 422 | The request failed validation, e.g. a negative price or quantity |
 
 ## Database migrations
 

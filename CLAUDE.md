@@ -4,9 +4,10 @@ Project: **Cloud-Native E-Commerce Platform** (college mini project, Cloud Compu
 Full plan: `docs/PROJECT_PLAN.md`. Read it before planning any week's work.
 
 ## Current status
-- **Current week: 3** (Products + Categories + Inventory). Branch `week-3-catalog`.
+- **Current week: 4** (Authentication + RBAC). Branch `week-4-auth`.
 - Week 1 done: in-memory product CRUD API.
 - Week 2 done (see "Week 2 summary").
+- Week 3 done (see "Week 3 summary").
 - Update this section when a week is finished.
 
 ## Priorities (in order)
@@ -63,6 +64,31 @@ Completed:
 
 Deferred by plan (not cut): CHECK constraints, category/inventory endpoints (Week 3); user endpoints and hashing (Week 4).
 Open item: Starlette deprecation warning about `httpx` in `TestClient` (suggests `httpx2`); not addressed because it means a new library.
+
+## Week 3 summary (branch `week-3-catalog`)
+Completed:
+- Errors: `core/exceptions.py` has `AppError` with subclasses `NotFoundError` (404), `BadRequestError` (400) and `ConflictError` (409). One handler is registered in `main.py` and returns `{"detail": ...}`. Services raise these errors; routers have no 404 checks. New code should follow this pattern.
+- Migration `22d1fd6d142c`, written by hand because autogenerate misses CHECK constraints:
+  - adds `ck_products_price_positive` and `ck_inventory_quantity_non_negative`
+  - backfills missing inventory rows
+- Products:
+  - optional `category_id`; an unknown ID returns 400
+  - each product gets an `Inventory(quantity=0)` row in the same commit
+  - price capped at 99,999,999.99 in the schema
+- Categories: `POST /categories` (409 on duplicate, caught from `IntegrityError`), `GET /categories` (sorted by name), `GET /categories/{id}`.
+- Inventory: `GET /inventory/{product_id}`, and `PUT` to set an absolute quantity (`ge=0`). An unknown product returns 404.
+- `GET /products`:
+  - `skip` (≥0), `limit` (1–100, default 20), `category_id`, and `q` (`icontains` with autoescape)
+  - stable `ORDER BY id`
+  - still returns a plain list (no total count)
+- Tests:
+  - 47 pass
+  - shared helpers in `tests/helpers.py`
+  - DB-level constraint tests in `tests/test_constraints.py`
+- `docs/database-design.md`: Week 3 constraints, plus a **Week 5 cart/order draft** with an open question about `order_items.product_id` on product delete.
+
+Scope cut or deferred: no category update/delete endpoints, which the plan didn't require. Category names are unique case-sensitively. Write endpoints are not yet admin-only (Week 4).
+Note: Docker Desktop must be started before `docker start ecom-db`. It is installed per-user under `%LOCALAPPDATA%\Programs\DockerDesktop`.
 
 ## Conventions
 - Type hints on all functions. Pydantic schemas are separate from SQLAlchemy models.
