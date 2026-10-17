@@ -11,7 +11,10 @@ class Settings(BaseSettings):
     `database_url` is read from `DATABASE_URL`.
     """
 
-    model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8")
+    # extra="ignore": .env is shared with Docker Compose, which reads its own
+    # variables from it (e.g. POSTGRES_PASSWORD). Without this, those unknown
+    # keys would stop the app from starting.
+    model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8", extra="ignore")
 
     environment: str = "development"
     # No defaults: connection strings and secrets must come from the environment.
