@@ -96,6 +96,52 @@ def _reduce_stock(locked_stock: dict[int, Inventory], cart_items: list[CartItem]
         locked_stock[item.product_id].quantity -= item.quantity
 
 
+# Which status an order may move to from each status. DELIVERED and CANCELLED
+# are final. A shipped order can no longer be cancelled.
+ALLOWED_STATUS_CHANGES: dict[OrderStatus, set[OrderStatus]] = {
+    OrderStatus.PLACED: {OrderStatus.SHIPPED, OrderStatus.CANCELLED},
+    OrderStatus.SHIPPED: {OrderStatus.DELIVERED},
+    OrderStatus.DELIVERED: set(),
+    OrderStatus.CANCELLED: set(),
+}
+
+
+def change_status(db: Session, order_id: int, new_status: OrderStatus) -> Order:
+    """Move an order to a new status (admin action), in one transaction.
+
+    Cancelling puts the ordered quantities back into stock. The order row is
+    locked first, so two admins cancelling at the same moment cannot restock twice.
+    """
+    order = db.get(Order, order_id, with_for_update=True)
+    if order is None:
+        raise NotFoundError("Order")
+    if new_status not in ALLOWED_STATUS_CHANGES[order.status]:
+        raise ConflictError(
+            f"Cannot change order status from {order.status.value} to {new_status.value}"
+        )
+
+    try:
+        if new_status == OrderStatus.CANCELLED:
+            _restock(db, order)
+        order.status = new_status
+        db.commit()
+    except Exception:
+        db.rollback()
+        raise
+    db.refresh(order)
+    return order
+
+
+def _restock(db: Session, order: Order) -> None:
+    """Return each line's quantity to stock. Lines whose product was deleted are skipped."""
+    for line in order.items:
+        if line.product_id is None:
+            continue
+        inventory = db.get(Inventory, line.product_id, with_for_update=True)
+        if inventory is not None:
+            inventory.quantity += line.quantity
+
+
 def list_orders(db: Session, user: User) -> list[Order]:
     """Return orders, newest first: all orders for an admin, otherwise only the user's own."""
     query = (

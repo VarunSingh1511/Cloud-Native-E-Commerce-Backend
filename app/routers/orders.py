@@ -3,11 +3,11 @@
 from fastapi import APIRouter, Depends, status
 from sqlalchemy.orm import Session
 
-from app.core.dependencies import get_current_user
+from app.core.dependencies import ADMIN_ONLY_RESPONSES, get_current_user, require_admin
 from app.db.session import get_db
 from app.models.order import Order
 from app.models.user import User
-from app.schemas.order import OrderResponse
+from app.schemas.order import OrderResponse, OrderStatusUpdate
 from app.services import orders as order_service
 
 router = APIRouter(prefix="/orders", tags=["Orders"])
@@ -59,3 +59,24 @@ def get_order(
 ) -> Order:
     """Return an order. Customers can only open their own orders."""
     return order_service.get_order(db, current_user, order_id)
+
+
+@router.patch(
+    "/{order_id}/status",
+    response_model=OrderResponse,
+    summary="Change an order's status (admin)",
+    responses={
+        **ADMIN_ONLY_RESPONSES,
+        404: {"description": "Order not found"},
+        409: {"description": "This status change is not allowed"},
+    },
+    dependencies=[Depends(require_admin)],
+)
+def change_order_status(
+    order_id: int, status_data: OrderStatusUpdate, db: Session = Depends(get_db)
+) -> Order:
+    """Allowed: PLACED → SHIPPED → DELIVERED, or PLACED → CANCELLED.
+
+    Cancelling returns the ordered quantities to stock.
+    """
+    return order_service.change_status(db, order_id, status_data.status)

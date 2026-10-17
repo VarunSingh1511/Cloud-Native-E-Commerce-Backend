@@ -7,6 +7,12 @@ from pydantic import BaseModel, ConfigDict
 from app.models.order import OrderStatus
 
 
+class OrderStatusUpdate(BaseModel):
+    """New status for an order (admin only)."""
+
+    status: OrderStatus
+
+
 class OrderItemResponse(BaseModel):
     """One line of an order, exactly as it was bought."""
 
