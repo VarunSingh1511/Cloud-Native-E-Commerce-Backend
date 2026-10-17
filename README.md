@@ -21,6 +21,11 @@ A cloud-native e-commerce backend built with FastAPI, developed as a Cloud Compu
   - Users register and log in to get a JWT access token. Passwords are hashed with Argon2.
   - Two roles: customers can browse, and only admins can change the catalog and stock.
   - A command creates the first admin.
+- **Week 5: Cart and orders.**
+  - Each user has a shopping cart.
+  - Checkout turns the cart into an order in a single database transaction: it checks and reduces stock, copies the prices paid, and empties the cart, or changes nothing if any product is short.
+  - Customers see their own order history.
+  - Admins see all orders and can ship, deliver or cancel them. Cancelling returns the stock.
 
 ## Technology
 
@@ -46,12 +51,14 @@ app/
 ├── models/                 # SQLAlchemy models: users, categories, products, inventory
 ├── schemas/                # Pydantic request and response schemas
 ├── services/               # Business logic and database operations
-├── routers/                # REST endpoints: health, auth, users, products, categories, inventory
+├── routers/                # REST endpoints: health, auth, users, products, categories,
+│                           #   inventory, cart, orders
 └── scripts/create_admin.py # Command that creates the first admin user
 alembic/versions/           # Database migrations
 tests/                      # pytest suite (conftest.py holds shared fixtures)
 docs/database-design.md     # Tables, relationships and design decisions
 docs/security.md            # How authentication and roles work
+docs/checkout.md            # How checkout works as one transaction
 .env.example                # Template for local environment variables
 ```
 
@@ -179,8 +186,26 @@ Access: **public** means no login is needed, **user** means any logged-in user, 
 | POST   | `/categories`             | admin  | Create a category (names must be unique)     |
 | GET    | `/inventory/{product_id}` | public | Get a product's stock level                  |
 | PUT    | `/inventory/{product_id}` | admin  | Set a product's stock level                  |
+| GET    | `/cart`                   | user   | View my cart with current prices and total   |
+| POST   | `/cart/items`             | user   | Add a product (adding it again increases the quantity) |
+| DELETE | `/cart/items/{item_id}`   | user   | Remove a line from my cart                   |
+| POST   | `/orders`                 | user   | Check out: turn my cart into an order        |
+| GET    | `/orders`                 | user   | My orders, newest first (admins: all orders) |
+| GET    | `/orders/{id}`            | user   | One of my orders (admins: any order)         |
+| PATCH  | `/orders/{id}/status`     | admin  | Change an order's status                     |
 
 To call protected endpoints outside Swagger, send the token from `/auth/login` in a header: `Authorization: Bearer <token>`. Tokens expire after 30 minutes; log in again to get a new one.
+
+**Placing an order:** add products with `POST /cart/items`, then call `POST /orders`.
+- Stock is checked and reduced at that moment, and the cart is emptied.
+- The order keeps the names and prices at the time of purchase, so later price changes do not affect it.
+
+**Order statuses:** an admin moves an order through these statuses with `PATCH /orders/{id}/status`:
+
+```text
+PLACED ──► SHIPPED ──► DELIVERED
+   └─────► CANCELLED   (stock is returned)
+```
 
 `GET /products` accepts these optional query parameters:
 
@@ -197,11 +222,11 @@ Errors return JSON in the form `{"detail": "..."}`:
 
 | Status | Meaning |
 | ------ | ------- |
-| 400 | The request refers to something that does not exist, e.g. an unknown `category_id` |
+| 400 | The request refers to something that does not exist, e.g. an unknown `category_id`, or checkout with an empty cart |
 | 401 | Not logged in, wrong email or password, or the token is invalid or expired |
 | 403 | Logged in, but not allowed, e.g. a customer trying to change a product |
-| 404 | The resource in the URL does not exist |
-| 409 | The request conflicts with existing data, e.g. a duplicate category name |
+| 404 | The resource in the URL does not exist, or it belongs to another customer (e.g. their order) |
+| 409 | The request conflicts with existing data, e.g. a duplicate category name, not enough stock at checkout, or a status change that is not allowed |
 | 422 | The request failed validation, e.g. a negative price or quantity |
 
 ## Database migrations
