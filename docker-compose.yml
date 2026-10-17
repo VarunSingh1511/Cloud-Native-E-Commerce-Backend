@@ -1,0 +1,79 @@
+# Runs the whole application locally: PostgreSQL, a one-off migration job, and the API.
+#
+#   docker compose up --build -d   build and start everything (API on http://localhost:8000)
+#   docker compose ps              show the services and their health
+#   docker compose logs -f api     follow the API's logs
+#   docker compose down            stop everything (database data is KEPT in the db-data volume)
+#   docker compose down -v         stop everything and DELETE the database data
+#
+# ${VARIABLE} values come from the .env file next to this file (copy .env.example).
+# ${VARIABLE:?message} makes Compose stop with that message if the variable is missing.
+
+name: ecom
+
+# Settings shared by the migrate and api services. The "&app-environment" anchor
+# defines this block once; "*app-environment" below reuses it.
+x-app-environment: &app-environment
+  ENVIRONMENT: ${ENVIRONMENT:-development}
+  # "db" is the database service's name: Compose's private network resolves it.
+  DATABASE_URL: postgresql+psycopg://postgres:${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env}@db:5432/ecom
+  SECRET_KEY: ${SECRET_KEY:?Set SECRET_KEY in .env (at least 32 characters)}
+  ACCESS_TOKEN_EXPIRE_MINUTES: ${ACCESS_TOKEN_EXPIRE_MINUTES:-30}
+
+services:
+  db:
+    image: postgres:16.15
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env}
+      POSTGRES_DB: ecom
+    volumes:
+      # A named volume keeps the data when the container is removed or recreated.
+      - db-data:/var/lib/postgresql/data
+    # No "ports:" on purpose: only the other services can reach the database,
+    # over Compose's private network. Inspect it with:
+    #   docker compose exec db psql -U postgres -d ecom
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d ecom"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    restart: unless-stopped
+
+  # Runs "alembic upgrade head" once, then exits. The API only starts after it
+  # succeeded, so the API never runs against an outdated schema.
+  migrate:
+    build: .
+    image: ecom-api:local
+    command: ["alembic", "upgrade", "head"]
+    environment: *app-environment
+    depends_on:
+      db:
+        condition: service_healthy
+
+  api:
+    build: .
+    image: ecom-api:local
+    environment: *app-environment
+    ports:
+      # host port : container port. Change API_PORT in .env if 8000 is taken.
+      - "${API_PORT:-8000}:8000"
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+    # Overrides the Dockerfile's /health check: the API counts as healthy only
+    # when it can also reach the database (/health/ready returns 503 otherwise).
+    healthcheck:
+      test:
+        - "CMD"
+        - "python"
+        - "-c"
+        - "import urllib.request; urllib.request.urlopen('http://localhost:8000/health/ready', timeout=4)"
+      interval: 10s
+      timeout: 5s
+      start_period: 10s
+      retries: 3
+    restart: unless-stopped
+
+volumes:
+  db-data:
