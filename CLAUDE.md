@@ -4,12 +4,13 @@ Project: **Cloud-Native E-Commerce Platform** (college mini project, Cloud Compu
 Full plan: `docs/PROJECT_PLAN.md`. Read it before planning any week's work.
 
 ## Current status
-- **Current week: 6** (Docker: Dockerfile + Compose). Branch `week-6-docker`.
+- **Current week: 7** (Azure fundamentals + free-tier check). Branch `week-7-azure`. **First week that touches Azure: follow the cost rule (workflow item 5) and get approval before creating anything.** Week 7 creates only budget alerts and the resource group.
 - Week 1 done: in-memory product CRUD API.
 - Week 2 done (see "Week 2 summary").
 - Week 3 done (see "Week 3 summary").
 - Week 4 done (see "Week 4 summary").
 - Week 5 done (see "Week 5 summary"). The application features are complete; from Week 6 the work is DevOps and cloud.
+- Week 6 done (see "Week 6 summary").
 - Update this section when a week is finished.
 
 ## Priorities (in order)
@@ -155,6 +156,33 @@ Completed:
 
 Scope cut or deferred: no payments (out of scope), no shipping addresses, no stock reservation when adding to the cart (only checked at checkout), no customer self-cancel, and no pagination on `GET /orders`.
 
+## Week 6 summary (branch `week-6-docker`)
+Completed:
+- `requirements.txt` holds runtime packages only (used by the image). `requirements-dev.txt` is `-r requirements.txt` plus pytest and httpx; use it for local setup and, later, CI.
+- `GET /health/ready` runs `SELECT 1` and returns 503 `{"status": "unavailable", "database": "unreachable"}` on `SQLAlchemyError`. `/health` stays DB-free (liveness). Tested with an overridden broken session.
+- `Dockerfile`:
+  - `python:3.13.16-slim`; requirements installed before the code is copied (layer cache)
+  - non-root `appuser` (uid 10001); the code is root-owned and read-only for the app
+  - `HEALTHCHECK` on `/health` via urllib (no curl in slim)
+  - exec-form `CMD` uvicorn on 0.0.0.0:8000; `docker stop` is clean in about 0.6 s
+  - image about 265 MB
+- `.dockerignore` excludes `.env*`, `.venv`, `.git`, `tests`, `docs`, `*.md`, Terraform files. Verified: no `.env` in the image, and no secrets in `inspect`/`history`.
+- `docker-compose.yml` (project name `ecom`):
+  - `db`: `postgres:16.15`, `db-data` volume, `pg_isready`, **no host port**
+  - `migrate`: `alembic upgrade head`; depends on `db` being healthy
+  - `api`: depends on `migrate` completing successfully; host port `${API_PORT:-8000}`; health check `/health/ready`; `restart: unless-stopped`
+  - The shared env comes from the `x-app-environment` anchor. `SECRET_KEY` and `POSTGRES_PASSWORD` are required (`${VAR:?msg}`), and `DATABASE_URL` points at host `db`.
+- Settings now use `extra="ignore"`, because Compose shares `.env` and its `POSTGRES_PASSWORD` would otherwise crash the app. Regression test in `tests/test_config.py`.
+- The owner's local `.env` gained `POSTGRES_PASSWORD=postgres`.
+- Verified:
+  - start order db→migrate→api, then the full shopping flow in containers
+  - data persists across `down`/`up`; `down -v` removes the volume
+  - with `db` stopped: `/health` 200, `/health/ready` 503, API unhealthy, then it recovers by itself
+  - a fresh clone works following only the README
+- Tests: 149 pass. Docs: new `docs/docker.md`; README has a "Quick start with Docker".
+
+Scope cut or deferred, as planned: no multi-stage build, no registry push (F1 code deploy in Week 8), no tests in the container (CI in Week 11), no Compose hot reload. Two Postgres instances exist locally: the standalone `ecom-db` (port 5432, used by tests and uvicorn) and the Compose `db` (no host port).
+
 ## Conventions
 - Type hints on all functions. Pydantic schemas are separate from SQLAlchemy models.
 - Routers stay thin; business logic goes in `services/`. DB access via a session dependency (`get_db`).
@@ -180,6 +208,9 @@ pytest                                  # run tests (needs ecom-db running; uses
 alembic revision --autogenerate -m "msg"   # then review the generated file before committing
 alembic check                           # confirm models and migrations match
 python -m app.scripts.create_admin you@example.com   # create/promote an admin (hidden password prompt)
+docker compose up --build -d            # whole stack in Docker (db + migrate + api on :8000)
+docker compose ps / logs -f api / down  # status, logs, stop (down -v also deletes DB data)
+docker compose exec api python -m app.scripts.create_admin you@example.com   # admin inside Compose
 ```
 
 ## Workflow instructions for Claude

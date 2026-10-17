@@ -26,6 +26,10 @@ A cloud-native e-commerce backend built with FastAPI, developed as a Cloud Compu
   - Checkout turns the cart into an order in a single database transaction: it checks and reduces stock, copies the prices paid, and empties the cart, or changes nothing if any product is short.
   - Customers see their own order history.
   - Admins see all orders and can ship, deliver or cancel them. Cancelling returns the stock.
+- **Week 6: Docker.**
+  - The API runs in a small, non-root Docker image.
+  - Docker Compose starts PostgreSQL, applies the database migrations, then starts the API.
+  - A readiness check, `/health/ready`, reports whether the API can reach the database.
 
 ## Technology
 
@@ -36,6 +40,7 @@ A cloud-native e-commerce backend built with FastAPI, developed as a Cloud Compu
 - SQLAlchemy 2.0 and Alembic
 - Argon2 (password hashing) and PyJWT (access tokens)
 - pytest
+- Docker and Docker Compose
 
 ## Project structure
 
@@ -48,7 +53,8 @@ app/
 ├── core/dependencies.py    # get_current_user and require_admin
 ├── db/base.py              # SQLAlchemy declarative base
 ├── db/session.py           # Database engine and the get_db session dependency
-├── models/                 # SQLAlchemy models: users, categories, products, inventory
+├── models/                 # SQLAlchemy models: users, categories, products, inventory,
+│                           #   carts, orders
 ├── schemas/                # Pydantic request and response schemas
 ├── services/               # Business logic and database operations
 ├── routers/                # REST endpoints: health, auth, users, products, categories,
@@ -59,10 +65,58 @@ tests/                      # pytest suite (conftest.py holds shared fixtures)
 docs/database-design.md     # Tables, relationships and design decisions
 docs/security.md            # How authentication and roles work
 docs/checkout.md            # How checkout works as one transaction
+docs/docker.md              # How the Docker image and Compose setup work
+Dockerfile                  # Recipe for the API's container image
+docker-compose.yml          # Runs the database, migrations and API together
+requirements.txt            # Packages the app needs to run
+requirements-dev.txt        # Those packages plus the test tools
 .env.example                # Template for local environment variables
 ```
 
-## Setup
+## Quick start with Docker
+
+The fastest way to run the whole application. You need [Docker Desktop](https://www.docker.com/products/docker-desktop/) installed and running.
+
+1. Create your settings file from the template:
+
+   ```bash
+   cp .env.example .env
+   ```
+
+2. Generate a secret key and paste it into `.env` as the value of `SECRET_KEY`:
+
+   ```bash
+   python -c "import secrets; print(secrets.token_urlsafe(32))"
+   ```
+
+3. Build and start everything:
+
+   ```bash
+   docker compose up --build -d
+   ```
+
+   Compose starts PostgreSQL, applies the database migrations, and then starts the API. Check that all services are up with `docker compose ps`: `api` and `db` should be *healthy*, and `migrate` should have exited with code 0.
+
+4. Create an admin user. You will be asked for a password twice:
+
+   ```bash
+   docker compose exec api python -m app.scripts.create_admin admin@example.com
+   ```
+
+The API now runs at `http://localhost:8000`, with Swagger UI at `http://localhost:8000/docs`.
+
+| Command | What it does |
+| ------- | ------------ |
+| `docker compose logs -f api` | Follow the API's logs |
+| `docker compose down` | Stop everything; the database data is kept |
+| `docker compose down -v` | Stop everything and delete the database data |
+| `docker compose up --build -d` | Rebuild and restart after changing the code |
+
+If port 8000 is already in use, set `API_PORT` in `.env` to another port. More details are in [docs/docker.md](docs/docker.md).
+
+## Development setup
+
+To work on the code with automatic reloading and to run the tests, run the API directly with Python. PostgreSQL still runs in a Docker container.
 
 ### 1. Python environment
 
@@ -108,6 +162,8 @@ The app reads its configuration from environment variables, or from `.env` if pr
 | `DATABASE_URL` | PostgreSQL connection string |
 | `SECRET_KEY` | Secret used for signing login tokens (at least 32 characters) |
 | `ACCESS_TOKEN_EXPIRE_MINUTES` | Optional; how long a login token is valid (default 30) |
+| `POSTGRES_PASSWORD` | Docker Compose only: password of the database container it creates |
+| `API_PORT` | Docker Compose only, optional: host port for the API (default 8000) |
 
 ### 3. PostgreSQL (Docker)
 
@@ -172,7 +228,8 @@ Access: **public** means no login is needed, **user** means any logged-in user, 
 | Method | Endpoint                  | Access | Description                                  |
 | ------ | ------------------------- | ------ | -------------------------------------------- |
 | GET    | `/`                       | public | Check that the API is running                |
-| GET    | `/health`                 | public | Health check for containers and cloud        |
+| GET    | `/health`                 | public | Liveness: is the API process running?        |
+| GET    | `/health/ready`           | public | Readiness: can the API reach the database? (503 if not) |
 | POST   | `/auth/register`          | public | Create a customer account                    |
 | POST   | `/auth/login`             | public | Log in (form fields `username`, `password`) and get a token |
 | GET    | `/users/me`               | user   | Get the logged-in account                    |
