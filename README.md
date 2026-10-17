@@ -82,10 +82,10 @@ Or on macOS/Linux:
 source .venv/bin/activate
 ```
 
-Install the dependencies:
+Install the dependencies, including the test tools (`requirements.txt` alone holds only what the app needs to run):
 
 ```bash
-pip install -r requirements.txt
+pip install -r requirements-dev.txt
 ```
 
 ### 2. Environment variables

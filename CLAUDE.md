@@ -169,7 +169,7 @@ Scope cut or deferred: no payments (out of scope), no shipping addresses, no sto
 ## Commands (update as the project grows)
 ```
 # create/activate venv, then:
-pip install -r requirements.txt
+pip install -r requirements-dev.txt          # runtime + test tools (requirements.txt = runtime only, used by Docker)
 cp .env.example .env                   # required: app won't start without DATABASE_URL and SECRET_KEY
 docker run --name ecom-db -e POSTGRES_PASSWORD=postgres -e POSTGRES_DB=ecom -p 5432:5432 -d postgres:16   # local DB until Week 6 Compose
 docker exec ecom-db createdb -U postgres ecom_test   # one-time: test database
