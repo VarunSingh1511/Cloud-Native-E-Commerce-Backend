@@ -33,3 +33,29 @@ def place_order(
     the cart. If any product is short, nothing changes.
     """
     return order_service.checkout(db, current_user)
+
+
+@router.get(
+    "",
+    response_model=list[OrderResponse],
+    summary="List orders (my own, or all orders for an admin)",
+    responses={401: {"description": "Not logged in"}},
+)
+def list_orders(
+    current_user: User = Depends(get_current_user), db: Session = Depends(get_db)
+) -> list[Order]:
+    """Customers see their own orders; admins see every order. Newest first."""
+    return order_service.list_orders(db, current_user)
+
+
+@router.get(
+    "/{order_id}",
+    response_model=OrderResponse,
+    summary="Get one order",
+    responses={401: {"description": "Not logged in"}, 404: {"description": "Order not found"}},
+)
+def get_order(
+    order_id: int, current_user: User = Depends(get_current_user), db: Session = Depends(get_db)
+) -> Order:
+    """Return an order. Customers can only open their own orders."""
+    return order_service.get_order(db, current_user, order_id)

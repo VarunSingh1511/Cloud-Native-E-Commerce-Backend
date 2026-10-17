@@ -8,13 +8,13 @@ See docs/checkout.md for a step-by-step explanation.
 from decimal import Decimal
 
 from sqlalchemy import select
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, selectinload
 
-from app.core.exceptions import BadRequestError, ConflictError
+from app.core.exceptions import BadRequestError, ConflictError, NotFoundError
 from app.models.cart import Cart, CartItem
 from app.models.inventory import Inventory
 from app.models.order import Order, OrderItem, OrderStatus
-from app.models.user import User
+from app.models.user import User, UserRole
 from app.services.cart import get_or_create_cart
 
 
@@ -94,3 +94,29 @@ def _reduce_stock(locked_stock: dict[int, Inventory], cart_items: list[CartItem]
     """Subtract each cart line's quantity from its (already locked) stock row."""
     for item in cart_items:
         locked_stock[item.product_id].quantity -= item.quantity
+
+
+def list_orders(db: Session, user: User) -> list[Order]:
+    """Return orders, newest first: all orders for an admin, otherwise only the user's own."""
+    query = (
+        select(Order)
+        # Load every order's items in one extra query, instead of one query per
+        # order when the response is built (the "N+1 queries" problem).
+        .options(selectinload(Order.items))
+        .order_by(Order.created_at.desc(), Order.id.desc())
+    )
+    if user.role != UserRole.ADMIN:
+        query = query.where(Order.user_id == user.id)
+    return list(db.scalars(query))
+
+
+def get_order(db: Session, user: User, order_id: int) -> Order:
+    """Return one order if the user may see it.
+
+    Another customer's order is reported as "not found" (404), not "forbidden"
+    (403), so nobody can learn which order IDs exist.
+    """
+    order = db.get(Order, order_id)
+    if order is None or (user.role != UserRole.ADMIN and order.user_id != user.id):
+        raise NotFoundError("Order")
+    return order

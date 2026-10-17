@@ -43,6 +43,14 @@ def add_to_cart(client: TestClient, product_id: int, quantity: int = 1) -> dict[
     return response.json()
 
 
+def place_order(client: TestClient, product_id: int, quantity: int = 1) -> dict[str, Any]:
+    """Put one product in the cart and check out; return the new order."""
+    add_to_cart(client, product_id, quantity)
+    response = client.post("/orders")
+    assert response.status_code == 201, response.text
+    return response.json()
+
+
 def headers_for_new_user(client: TestClient, email: str) -> dict[str, str]:
     """Register and log in another user; return headers that act as that user."""
     register(client, email=email)
