@@ -66,3 +66,8 @@ class OrderItem(Base):
     quantity: Mapped[int]
 
     order: Mapped[Order] = relationship(back_populates="items")
+
+    @property
+    def line_total(self) -> Decimal:
+        """Price paid for this line (exact Decimal arithmetic). Not a database column."""
+        return self.unit_price * self.quantity
