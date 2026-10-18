@@ -30,6 +30,10 @@ A cloud-native e-commerce backend built with FastAPI, developed as a Cloud Compu
   - The API runs in a small, non-root Docker image.
   - Docker Compose starts PostgreSQL, applies the database migrations, then starts the API.
   - A readiness check, `/health/ready`, reports whether the API can reach the database.
+- **Week 7: Azure groundwork.**
+  - Checked which Azure services the student subscription offers for free (App Service F1, PostgreSQL B1ms, 5 GB of Blob Storage), and chose the region India South Central.
+  - Budget alerts are set at ₹500, ₹1,000, ₹2,500 and ₹4,000, and an empty, tagged resource group is ready for the deployment.
+  - So far, Azure has cost ₹0.
 
 ## Technology
 
@@ -66,6 +70,9 @@ docs/database-design.md     # Tables, relationships and design decisions
 docs/security.md            # How authentication and roles work
 docs/checkout.md            # How checkout works as one transaction
 docs/docker.md              # How the Docker image and Compose setup work
+docs/azure-cost-notes.md    # Free tiers, prices, region and the cheapest Azure setup
+docs/azure-cost-log.md      # Weekly record of Azure spending
+docs/azure-fundamentals.md  # Cloud concepts used in this project
 Dockerfile                  # Recipe for the API's container image
 docker-compose.yml          # Runs the database, migrations and API together
 requirements.txt            # Packages the app needs to run

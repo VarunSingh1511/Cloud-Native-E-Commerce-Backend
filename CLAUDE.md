@@ -4,13 +4,14 @@ Project: **Cloud-Native E-Commerce Platform** (college mini project, Cloud Compu
 Full plan: `docs/PROJECT_PLAN.md`. Read it before planning any week's work.
 
 ## Current status
-- **Current week: 7** (Azure fundamentals + free-tier check). Branch `week-7-azure`. **First week that touches Azure: follow the cost rule (workflow item 5) and get approval before creating anything.** Week 7 creates only budget alerts and the resource group.
+- **Current week: 8** (Azure App Service deployment, F1 code deploy). Branch `week-8-app-service`. **Cost rule applies: state the cost and get approval before creating each resource; use region `indiasouthcentral` and resource group `rg-ecom-mini`.**
 - Week 1 done: in-memory product CRUD API.
 - Week 2 done (see "Week 2 summary").
 - Week 3 done (see "Week 3 summary").
 - Week 4 done (see "Week 4 summary").
 - Week 5 done (see "Week 5 summary"). The application features are complete; from Week 6 the work is DevOps and cloud.
 - Week 6 done (see "Week 6 summary").
+- Week 7 done (see "Week 7 summary").
 - Update this section when a week is finished.
 
 ## Priorities (in order)
@@ -183,6 +184,36 @@ Completed:
 
 Scope cut or deferred, as planned: no multi-stage build, no registry push (F1 code deploy in Week 8), no tests in the container (CI in Week 11), no Compose hot reload. Two Postgres instances exist locally: the standalone `ecom-db` (port 5432, used by tests and uvicorn) and the Compose `db` (no host port).
 
+## Week 7 summary (branch `week-7-azure`)
+Completed (all ₹0; details in `docs/azure-cost-notes.md`):
+- Subscription facts:
+  - **Azure for Students**, a university tenant with MFA. If the CLI says `AADSTS50078`, the owner must run `az login` again.
+  - Billing currency **INR**.
+  - Credit ₹9,599, expires **8 Sep 2027**. When it runs out, services are disabled rather than billed. **Never upgrade.**
+  - The owner is **Owner** of the subscription.
+  - **Azure Policy allows only** `indiasouthcentral`, `malaysiawest`, `koreacentral`, `eastasia` and `indonesiacentral`. Central India is NOT allowed.
+- Free amounts, from the portal's *Free services* page:
+  - App Service F1: 10 apps, 1 GB, 60 CPU-min/day
+  - PostgreSQL Flexible **B1ms 750 h/month, 32 GB storage, 32 GB backup**, for one server only
+  - Blob 5 GB LRS hot
+  - 1 Standard Container Registry
+  - Log Analytics: first 5 GB/month
+- Paid fallback prices, `indiasouthcentral`: PG B1ms ₹2.35/h; App B1 Linux ₹1.73/h.
+- **Region chosen: `indiasouthcentral`** (India South Central, Hyderabad). It's the only allowed region in India, and every needed service is available there (checked with the CLI).
+- Budget `ecom-mini-budget`:
+  - subscription scope, **Annual**, 2026-10-01 to 2027-09-30, **₹4,000**
+  - alerts: Actual 12.5% / 25% / 62.5% / 100% (₹500 / 1,000 / 2,500 / 4,000) and Forecast 100%
+  - emails go to the owner's university address, which is deliberately not in the repo
+  - created with `az rest` PUT to `Microsoft.Consumption/budgets` (api-version 2023-05-01), because `az consumption budget create` cannot set notifications
+  - The pre-existing `lab-credit-budget` (₹100, another project) is left untouched.
+- Registered providers: `Microsoft.Web`, `Microsoft.DBforPostgreSQL`, `Microsoft.Storage`, `Microsoft.OperationalInsights`, `Microsoft.Insights`.
+- Resource group `rg-ecom-mini` in `indiasouthcentral` with tags `project=ecom-mini environment=dev owner=varun managed-by=manual`. **It is empty.** `NetworkWatcherRG` already existed (Azure-created).
+- Docs: `docs/azure-cost-notes.md` (facts, free-tier table, cheapest path, fallback plan, emergency stop), `docs/azure-cost-log.md` (first entry ₹0), `docs/azure-fundamentals.md` (IaaS/PaaS/SaaS, regions, resource groups, providers, secrets, cost management).
+- No app code changes; 149 tests pass.
+- **Never commit** the subscription ID, tenant ID or email addresses.
+
+Scope cut or deferred: none. Container vs code deploy is decided in Week 8 (a free Standard registry exists, but the default stays F1 code deploy).
+
 ## Conventions
 - Type hints on all functions. Pydantic schemas are separate from SQLAlchemy models.
 - Routers stay thin; business logic goes in `services/`. DB access via a session dependency (`get_db`).
@@ -211,6 +242,9 @@ python -m app.scripts.create_admin you@example.com   # create/promote an admin (
 docker compose up --build -d            # whole stack in Docker (db + migrate + api on :8000)
 docker compose ps / logs -f api / down  # status, logs, stop (down -v also deletes DB data)
 docker compose exec api python -m app.scripts.create_admin you@example.com   # admin inside Compose
+az login                                # owner signs in (MFA); Claude then uses the CLI session
+az resource list -o table               # weekly: what exists in Azure (log totals in docs/azure-cost-log.md)
+az group delete -n rg-ecom-mini --yes   # EMERGENCY STOP: deletes everything in the project's resource group
 ```
 
 ## Workflow instructions for Claude
