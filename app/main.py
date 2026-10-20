@@ -15,7 +15,7 @@ from app.routers.users import router as users_router
 app = FastAPI(
     title="Cloud E-Commerce API",
     description="Cloud-native e-commerce backend built with FastAPI.",
-    version="0.4.0",
+    version="0.8.0",
 )
 
 # Any AppError raised during a request (e.g. NotFoundError) becomes a JSON error response.
