@@ -34,6 +34,8 @@ class Product(Base):
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now()
     )
+    # Public URL of the product's image in Azure Blob Storage (Week 9), or None.
+    image_url: Mapped[str | None] = mapped_column(String(500))
 
     category: Mapped["Category | None"] = relationship(back_populates="products")
     # One-to-one: each product has at most one inventory row. Deleting the product

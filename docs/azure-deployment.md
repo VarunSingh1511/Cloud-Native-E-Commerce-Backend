@@ -13,9 +13,13 @@ This PC: docker build ──► docker push ──► Azure Container Registry (
                                               ▼
 Internet ──HTTPS──► App Service plan F1 (Linux) ─ web app runs the container           [Malaysia West]
                      settings → environment variables: DATABASE_URL, SECRET_KEY, ...
-                                              │  TLS (sslmode=require), firewall: web app outbound IPs only
-                                              ▼
-                    Azure Database for PostgreSQL Flexible Server B1ms, v16             [Malaysia West]
+                          │                   │  TLS verify-full, user ecom_app, firewall: web app outbound IPs only
+                          │                   ▼
+                          │  Azure Database for PostgreSQL Flexible Server B1ms, v16    [Malaysia West]
+                          │  managed identity (Storage Blob Data Contributor, container only)
+                          ▼
+                    Storage account (Standard LRS) / container product-images          [Malaysia West]
+                    images are public-read by URL (no listing)   (Week 9, see docs/storage.md)
 ```
 
 ## Resources
@@ -69,11 +73,13 @@ All of these are in resource group `rg-ecom-mini` and tagged `project=ecom-mini`
 ## How settings reach the app
 | App setting | Purpose |
 | --- | --- |
-| `DATABASE_URL` | `postgresql+psycopg://ecomadmin:<password>@<server>.postgres.database.azure.com:5432/ecom?sslmode=require` |
+| `DATABASE_URL` | `postgresql+psycopg://ecom_app:<password>@<server>.postgres.database.azure.com:5432/ecom?sslmode=verify-full&sslrootcert=/etc/ssl/certs/ca-certificates.crt`. Since Week 9 this is the limited `ecom_app` user with verified TLS (see `docs/database-hardening.md`). |
 | `SECRET_KEY` | Signs login tokens (a random 43-character value) |
 | `ENVIRONMENT` | `production` (shown by `/health`) |
 | `ACCESS_TOKEN_EXPIRE_MINUTES` | `30` |
 | `WEBSITES_PORT` | `8000`: tells App Service which port the container listens on |
+| `AZURE_STORAGE_ACCOUNT_URL` | `https://<storage-account>.blob.core.windows.net` (Week 9). Not a secret; access uses the managed identity. |
+| `AZURE_STORAGE_CONTAINER` | `product-images` |
 
 You can view or change these in the portal under *Web app → Settings → Environment variables*. Changing a setting restarts the app.
 
@@ -170,25 +176,34 @@ From Week 11, GitHub Actions does these steps on every push to `main`.
 | **Delete everything** | `az group delete -n rg-ecom-mini --yes` |
 
 ## Creating an admin on Azure
-The API never lets anyone become an admin, and the Azure database starts empty, so the first admin is created with `app/scripts/create_admin.py`, run **on your PC against the Azure database**. In PowerShell, from the project folder with the venv active:
+The API never lets anyone become an admin, and the Azure database starts empty, so the first admin is created with `app/scripts/create_admin.py`.
+
+Since Week 9 the database connection uses `verify-full` TLS with a CA file path that exists inside the Docker image but not on Windows. So the command runs **inside the deployed Docker image**: the same environment as App Service, with full TLS verification. You need Docker Desktop running. In PowerShell:
 
 ```powershell
 # 1. Allow your current public IP through the database firewall (temporary)
-$myIp = (Invoke-RestMethod https://api.ipify.org)
+$myIp = Invoke-RestMethod https://api.ipify.org
 az postgres flexible-server firewall-rule create -g rg-ecom-mini --server-name <server> --name temp-admin-pc --start-ip-address $myIp --end-ip-address $myIp --output none
 
-# 2. Put the Azure database URL into this terminal only (not shown, not saved)
+# 2. Find the image the app runs, and get it onto this PC
+$image = (az webapp show -g rg-ecom-mini -n <app> --query siteConfig.linuxFxVersion -o tsv) -replace '^DOCKER\|', ''
+az acr login -n <registry>
+docker pull $image
+
+# 3. Put the Azure database URL into this terminal only (not shown, not saved)
 $env:DATABASE_URL = az webapp config appsettings list -g rg-ecom-mini -n <app> --query "[?name=='DATABASE_URL'].value | [0]" -o tsv
 
-# 3. Create the admin (type a new password twice; nothing is shown while typing)
-python -m app.scripts.create_admin you@example.com
+# 4. Create the admin inside the image (type a new password twice; nothing is shown while typing)
+docker run --rm -it -e DATABASE_URL -e SECRET_KEY=not-used-by-this-command-0123456789abcdef $image python -m app.scripts.create_admin you@example.com
 
-# 4. Clean up
+# 5. Clean up
 Remove-Item Env:DATABASE_URL
 az postgres flexible-server firewall-rule delete -g rg-ecom-mini --server-name <server> --name temp-admin-pc --yes
 ```
 
-A real environment variable overrides the `DATABASE_URL` in your `.env`, so for those few minutes the local script talks to Azure.
+- `-e DATABASE_URL` with no value passes the variable from your terminal into the container without writing it into the command.
+- `SECRET_KEY` is required by the settings, but `create_admin` doesn't use it, so any 32+ character value works.
+- `-it` makes the hidden password prompt work.
 
 ## F1 (free tier) limits to know
 - **60 CPU-minutes a day.**

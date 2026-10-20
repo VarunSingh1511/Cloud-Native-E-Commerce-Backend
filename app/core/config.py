@@ -26,6 +26,11 @@ class Settings(BaseSettings):
     # How long a login token stays valid. Short-lived tokens limit the damage if
     # one is stolen, since this project has no logout/revocation.
     access_token_expire_minutes: int = Field(default=30, gt=0)
+    # Azure Blob Storage for product images, e.g. https://<account>.blob.core.windows.net
+    # Not a secret: access uses an Azure identity, never an account key. When it is
+    # unset, image upload answers 503 and everything else works normally.
+    azure_storage_account_url: str | None = None
+    azure_storage_container: str = "product-images"
 
 
 # One shared instance; the app fails at startup if a required setting is missing.
