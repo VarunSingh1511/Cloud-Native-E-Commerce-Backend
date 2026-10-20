@@ -43,6 +43,10 @@ A cloud-native e-commerce backend built with FastAPI, developed as a Cloud Compu
   - The app reaches storage with its own Azure identity, so there are no storage keys at all.
   - The app now connects to the database as a limited user, not the admin, over a fully verified TLS connection.
   - A backup restore has been tested.
+- **Week 10: Infrastructure as code.**
+  - The whole Azure setup is described in Terraform: the existing resources were adopted without downtime for data.
+  - The parts holding data (database, images, container registry) are protected from accidental deletion.
+  - The web app layer has been destroyed and rebuilt entirely from code.
 
 ## Technology
 
@@ -54,6 +58,7 @@ A cloud-native e-commerce backend built with FastAPI, developed as a Cloud Compu
 - Argon2 (password hashing) and PyJWT (access tokens)
 - pytest
 - Docker and Docker Compose
+- Terraform (infrastructure as code)
 - Azure: App Service, Container Registry, Database for PostgreSQL, Blob Storage
 
 ## Project structure
@@ -89,6 +94,8 @@ docs/azure-fundamentals.md  # Cloud concepts used in this project
 docs/azure-deployment.md    # How the app is deployed to Azure, redeployed and rolled back
 docs/storage.md             # Product images in Azure Blob Storage
 docs/database-hardening.md  # Database user, TLS verification and the backup restore drill
+docs/terraform.md           # How the Azure setup is managed with Terraform
+infrastructure/             # Terraform: foundation/ (protected) and app/ (rebuildable), see its README
 Dockerfile                  # Recipe for the API's container image
 docker-compose.yml          # Runs the database, migrations and API together
 requirements.txt            # Packages the app needs to run
@@ -330,7 +337,7 @@ Check a deployment with:
 python scripts/smoke_test.py https://<your-app>.azurewebsites.net
 ```
 
-The full set of commands, the design decisions, how to create an admin on Azure, and the free-tier limits are in [docs/azure-deployment.md](docs/azure-deployment.md). Costs are tracked in [docs/azure-cost-log.md](docs/azure-cost-log.md).
+The Azure resources themselves are managed with Terraform: see [infrastructure/README.md](infrastructure/README.md) for how to plan, apply, and rebuild the app layer. The full set of deployment commands, the design decisions, how to create an admin on Azure, and the free-tier limits are in [docs/azure-deployment.md](docs/azure-deployment.md). Costs are tracked in [docs/azure-cost-log.md](docs/azure-cost-log.md).
 
 ## Database migrations
 
