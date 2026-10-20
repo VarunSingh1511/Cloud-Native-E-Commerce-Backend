@@ -4,7 +4,7 @@ Project: **Cloud-Native E-Commerce Platform** (college mini project, Cloud Compu
 Full plan: `docs/PROJECT_PLAN.md`. Read it before planning any week's work.
 
 ## Current status
-- **Current week: 10** (Terraform). Branch `week-10-terraform`. **Cost rule applies. The live environment is described in the Week 8 and Week 9 summaries; Terraform must describe it, and `destroy` must never remove the registry without the owner's OK.**
+- **Current week: 11** (GitHub Actions CI/CD). Branch `week-11-cicd`. **Cost rule applies.** Azure is now managed by Terraform (`infrastructure/`); make infra changes there, never by hand. CI deploys images with `az webapp config container set --container-image-name <acr>.azurecr.io/ecom-api:<sha>` (Terraform ignores the image tag). Prefer OIDC federated credentials for GitHub → Azure (no stored secret).
 - Week 1 done: in-memory product CRUD API.
 - Week 2 done (see "Week 2 summary").
 - Week 3 done (see "Week 3 summary").
@@ -14,6 +14,7 @@ Full plan: `docs/PROJECT_PLAN.md`. Read it before planning any week's work.
 - Week 7 done (see "Week 7 summary").
 - Week 8 done (see "Week 8 summary"). **The API is live on Azure.**
 - Week 9 done (see "Week 9 summary").
+- Week 10 done (see "Week 10 summary").
 - Update this section when a week is finished.
 
 ## Priorities (in order)
@@ -316,6 +317,46 @@ Other:
 
 Scope cut or deferred: no image resizing, CDN, Key Vault, Entra ID database login, or private networking (F1 can't use a VNet). Cost data for storage wasn't visible yet; recheck on 2026-10-22.
 
+## Week 10 summary (branch `week-10-terraform`)
+Owner decisions:
+- **Two layers:**
+  - `infrastructure/foundation` is LOCKED with `prevent_destroy`: resource group, budget, ACR, PG server + `ecom` database, storage account + container, plus `random_password` for the PG admin and for `ecom_app`.
+  - `infrastructure/app` can be destroyed freely: the F1 plan (`var.plan_sku`), the web app, the AcrPull and Blob Data Contributor roles, the PG firewall rules (`for_each` over `possible_outbound_ip_address_list`, named `app-<ip-with-dashes>`), and the `SECRET_KEY` (`random_password`).
+- **Local, git-ignored state.** The state contains secrets; back it up privately.
+
+Technical details:
+- `azurerm` = 5.8.0, `random` = 3.9.1; lock files committed. `storage_use_azuread = true`, because storage keys are off.
+- The app reads the foundation through `terraform_remote_state` (local path).
+- `terraform.tfvars` (subscription_id, name_suffix, alert_email) is git-ignored; `*.tfvars.example` are committed. `.gitignore` also covers `*.tfplan`.
+- **Adoption:**
+  - foundation: 7 imports, 2 added, 5 changed, 0 destroyed
+  - app: 4 imports, 32 added, 2 changed, 0 destroyed
+  - both now show "No changes"
+  - foundation `imports.tf` kept; app `imports.tf` deleted after adoption (it would break a rebuild)
+- **Budget is now ₹5,000 with 10/20/50/80 %** (Terraform needs whole-number thresholds); the rupee alerts are unchanged.
+- All secrets were rotated from Terraform: admin, `ecom_app` (set in the DB with `scripts/create_app_db_user.py` using `terraform output -raw`) and `SECRET_KEY`.
+- **Web app details:**
+  - `ftp_/webdeploy_publish_basic_authentication_enabled = false` explicitly; the provider's defaults would turn them on
+  - `ignore_changes` on `docker_image_name`
+  - `docker_image_name` must be `ecom-api:<tag>` WITHOUT the registry host (`docker_registry_url` carries it). Import had stored the full name, Azure doubled the host, the container failed to start and F1's quota burned. This was fixed.
+- **Rebuild is two-step:** `apply -target=azurerm_linux_web_app.api`, then `apply`, then `az webapp restart`. Firewall rule changes take about 1 min each (about 30 min for 31).
+
+Verified:
+- foundation `plan -destroy` is refused
+- app destroy (32 min) → foundation and data intact → rebuild (35 min) → smoke 10/10
+- the app connects as `ecom_app` over TLSv1.3; the old exposed password is rejected
+- 31 rules = outbound IPs; no temporary rules
+
+Incidents (documented in `docs/terraform.md`):
+- the first app plan printed the live `DATABASE_URL`/`SECRET_KEY` (old values of an imported, non-sensitive attribute); rotated immediately, and the old password was verified rejected
+- the doubled image host
+- a long apply restarted the app early
+
+Cost: B1 (approved) 16:42–17:55 UTC, about ₹2.11. **Re-check costs on 2026-10-22.**
+Docs: new `docs/terraform.md` and `infrastructure/README.md` (runbook: setup, rebuild, B1, password rotation, guardrails); deployment guide, cost notes and log, README updated.
+
+Scope cut or deferred: no remote state, no Terraform in CI, no PostgreSQL provider (roles via script), no write-only (`_wo`) password arguments yet.
+
 ## Conventions
 - Type hints on all functions. Pydantic schemas are separate from SQLAlchemy models.
 - Routers stay thin; business logic goes in `services/`. DB access via a session dependency (`get_db`).
@@ -347,6 +388,8 @@ docker compose exec api python -m app.scripts.create_admin you@example.com   # a
 az login                                # owner signs in (MFA); Claude then uses the CLI session
 az resource list -o table               # weekly: what exists in Azure (log totals in docs/azure-cost-log.md)
 az group delete -n rg-ecom-mini --yes   # EMERGENCY STOP: deletes everything in the project's resource group
+terraform -chdir=infrastructure/foundation plan   # infra changes: plan first, read every line, then apply
+terraform -chdir=infrastructure/app plan          # app layer (destroy/rebuild steps in infrastructure/README.md)
 python scripts/smoke_test.py <url>      # check a deployment (local or https://<app>.azurewebsites.net)
 # deploy a new image: build in a clean worktree, tag = git short SHA; az acr login + docker push;
 # az webapp config container set --container-image-name <acr>.azurecr.io/ecom-api:<sha>; az webapp restart

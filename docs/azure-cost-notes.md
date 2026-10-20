@@ -66,7 +66,10 @@ Prices are from the Azure Retail Prices API in INR, for India South Central, on 
 | F1 is too limited for a demo (CPU quota, cold starts) | Switch to B1 for the demo days only, then back to F1 | about ₹42/day |
 | A container deploy is wanted (optional stretch) | B1 plan plus the free Standard registry, for a few days only | about ₹42/day |
 
-## Budget alerts (created in Week 7)
+## Budget alerts (created in Week 7, managed by Terraform since Week 10)
+
+> **Week 10:** the budget amount is now **₹5,000**, the hard cap, with alerts at **10 / 20 / 50 / 80 %**. Those are exactly the same ₹500 / ₹1,000 / ₹2,500 / ₹4,000 alerts, plus a forecast alert at 80 % (₹4,000). Terraform only accepts whole-number percentages, so 12.5 % of ₹4,000 could not be expressed. The table below shows the original Week 7 setup.
+
 | Budget | Scope | Period | Amount | Alerts (sent to the owner's university email) |
 | --- | --- | --- | --- | --- |
 | `ecom-mini-budget` | Whole subscription | Annual, 2026-10-01 to 2027-09-30 | **₹4,000** | Actual ₹500 (12.5%), ₹1,000 (25%), ₹2,500 (62.5%), ₹4,000 (100%), plus a **forecast** of 100% |

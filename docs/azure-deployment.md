@@ -4,6 +4,12 @@ The API runs on Azure as the **same Docker image** that runs locally with Docker
 
 > Resource names end in a random 4-character suffix because registry, server and web app names must be unique across all of Azure. The public URL is `https://<web-app-name>.azurewebsites.net`. It is deliberately not written in the repository, so bots don't use up the free tier's daily CPU quota.
 
+
+> **Since Week 10, these resources are managed by Terraform** ([infrastructure/](../infrastructure/), explained in [docs/terraform.md](terraform.md)).
+> - The `az` commands below are how they were first built, kept for understanding.
+> - **Make infrastructure changes through Terraform now.** Firewall rules are generated automatically from the app's outbound IPs.
+> - **Deploying a new image still uses the commands in "Deploying a new version".** Terraform deliberately ignores the running image tag.
+
 ## Architecture
 
 ```text

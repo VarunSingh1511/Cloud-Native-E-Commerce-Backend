@@ -10,10 +10,16 @@ __pycache__/
 .env.*
 !.env.example
 
-# Terraform (Week 10): never commit state or provider caches
+# Terraform: never commit state (it contains generated passwords), variable files
+# with real values, or provider caches. The .terraform.lock.hcl file IS committed.
 .terraform/
 *.tfstate
 *.tfstate.*
+.terraform.tfstate.lock.info
+*.tfvars
+!*.tfvars.example
+*.tfplan
+crash.log
 
 # Editor settings
 .vscode/
