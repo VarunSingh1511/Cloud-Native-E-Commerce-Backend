@@ -41,6 +41,16 @@ output "images_container_id" {
   value       = azurerm_storage_container.product_images.id
 }
 
+output "github_deploy_client_id" {
+  description = "Client ID of the GitHub Actions identity (GitHub secret AZURE_CLIENT_ID)."
+  value       = azurerm_user_assigned_identity.github_deploy.client_id
+}
+
+output "github_deploy_principal_id" {
+  description = "Object ID of the GitHub Actions identity, used by the app layer's role assignment."
+  value       = azurerm_user_assigned_identity.github_deploy.principal_id
+}
+
 # --- secrets: marked sensitive, so Terraform never prints them ---------------
 
 output "app_database_url" {

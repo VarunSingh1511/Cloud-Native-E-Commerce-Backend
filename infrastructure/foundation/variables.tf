@@ -38,3 +38,9 @@ variable "tags" {
     managed-by  = "terraform"
   }
 }
+
+variable "github_repository" {
+  description = "owner/name of the GitHub repository whose workflows may deploy (public, not a secret)."
+  type        = string
+  default     = "VarunSingh1511/Cloud-Native-E-Commerce-Backend"
+}

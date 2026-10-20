@@ -113,6 +113,15 @@ resource "azurerm_role_assignment" "images_writer" {
   principal_type       = "ServicePrincipal"
 }
 
+# GitHub Actions (foundation identity) may change this web app's image and restart
+# it. Scoped to this one web app: no access to the plan, database or storage.
+resource "azurerm_role_assignment" "github_deploy" {
+  scope                = azurerm_linux_web_app.api.id
+  role_definition_name = "Website Contributor"
+  principal_id         = local.foundation.github_deploy_principal_id
+  principal_type       = "ServicePrincipal"
+}
+
 # ----------------------------------------------------------- database firewall
 # One rule per address the web app may use for outgoing connections. Generated
 # from the app itself, so the list can never drift out of date.
