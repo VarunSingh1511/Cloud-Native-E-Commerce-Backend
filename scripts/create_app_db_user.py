@@ -24,19 +24,30 @@ from psycopg import sql
 APP_ROLE = "ecom_app"
 
 
+def ensure_role(cur: psycopg.Cursor, role: str, password: str) -> None:
+    """Create the login role, or only change its password if it already exists."""
+    role_id = sql.Identifier(role)
+    exists = cur.execute("SELECT 1 FROM pg_roles WHERE rolname = %s", (role,)).fetchone()
+    if exists:
+        # Only the password. On Azure, the admin is not a superuser, and PostgreSQL
+        # refuses any ALTER ROLE that even mentions SUPERUSER from a non-superuser.
+        cur.execute(
+            sql.SQL("ALTER ROLE {} WITH LOGIN PASSWORD {}").format(role_id, sql.Literal(password))
+        )
+    else:
+        # LOGIN: it can connect. NOSUPERUSER/NOCREATEDB/NOCREATEROLE: nothing beyond that.
+        cur.execute(
+            sql.SQL("CREATE ROLE {} LOGIN PASSWORD {} NOSUPERUSER NOCREATEDB NOCREATEROLE").format(
+                role_id, sql.Literal(password)
+            )
+        )
+
+
 def setup_app_role(conn: psycopg.Connection, role: str, password: str) -> None:
     """Create or update `role` and give it exactly what the app needs. Does not commit."""
     cur = conn.cursor()
     role_id = sql.Identifier(role)
-
-    exists = cur.execute("SELECT 1 FROM pg_roles WHERE rolname = %s", (role,)).fetchone()
-    action = "ALTER ROLE {} WITH" if exists else "CREATE ROLE {}"
-    # LOGIN: it can connect. NOSUPERUSER/NOCREATEDB/NOCREATEROLE: nothing beyond that.
-    cur.execute(
-        sql.SQL(action + " LOGIN PASSWORD {} NOSUPERUSER NOCREATEDB NOCREATEROLE").format(
-            role_id, sql.Literal(password)
-        )
-    )
+    ensure_role(cur, role, password)
 
     # Since PostgreSQL 16, a non-superuser admin (like Azure's server admin) that
     # creates a role may not yet "act as" it. Membership is needed to hand the

@@ -77,6 +77,23 @@ def test_running_twice_is_safe(conn: psycopg.Connection) -> None:
     assert count.fetchone() == (1,)
 
 
+def test_rerun_works_for_a_non_superuser_admin(conn: psycopg.Connection) -> None:
+    """Azure's server admin is not a superuser; re-running must still work for it."""
+    conn.execute("CREATE ROLE pytest_cloud_admin CREATEROLE")
+    conn.execute("SET ROLE pytest_cloud_admin")
+    script = load_script()
+    cur = conn.cursor()
+
+    script.ensure_role(cur, TEST_ROLE, "first-password")
+    script.ensure_role(cur, TEST_ROLE, "second-password")  # used to fail on Azure
+
+    conn.execute("RESET ROLE")
+    row = conn.execute(
+        "SELECT rolcanlogin, rolsuper FROM pg_roles WHERE rolname = %s", (TEST_ROLE,)
+    ).fetchone()
+    assert row == (True, False)
+
+
 def test_main_requires_environment_variables(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.delenv("ADMIN_DATABASE_URL", raising=False)
     monkeypatch.delenv("APP_DB_PASSWORD", raising=False)
