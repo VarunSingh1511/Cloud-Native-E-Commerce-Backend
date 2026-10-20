@@ -38,6 +38,11 @@ A cloud-native e-commerce backend built with FastAPI, developed as a Cloud Compu
   - The same Docker image that runs locally now runs on Azure App Service (free F1 tier), pulled from Azure Container Registry without any stored password (managed identity).
   - It uses a managed Azure PostgreSQL database. The connection is encrypted, and only the app's own IP addresses are allowed through the firewall.
   - The API is served over HTTPS. A smoke-test script checks any deployment, and redeploying or rolling back means pointing the app at another image tag.
+- **Week 9: Product images and a hardened database.**
+  - Admins can upload a product photo. It is stored in Azure Blob Storage, and anyone can view it at its public URL.
+  - The app reaches storage with its own Azure identity, so there are no storage keys at all.
+  - The app now connects to the database as a limited user, not the admin, over a fully verified TLS connection.
+  - A backup restore has been tested.
 
 ## Technology
 
@@ -49,7 +54,7 @@ A cloud-native e-commerce backend built with FastAPI, developed as a Cloud Compu
 - Argon2 (password hashing) and PyJWT (access tokens)
 - pytest
 - Docker and Docker Compose
-- Azure: App Service, Container Registry, Database for PostgreSQL
+- Azure: App Service, Container Registry, Database for PostgreSQL, Blob Storage
 
 ## Project structure
 
@@ -71,6 +76,7 @@ app/
 ├── scripts/create_admin.py # Command that creates the first admin user
 └── scripts/start.py        # Container start command on Azure: migrate, then serve
 scripts/smoke_test.py       # Checks a running deployment (local or Azure)
+scripts/create_app_db_user.py # Creates the limited database user the app connects as
 alembic/versions/           # Database migrations
 tests/                      # pytest suite (conftest.py holds shared fixtures)
 docs/database-design.md     # Tables, relationships and design decisions
@@ -81,6 +87,8 @@ docs/azure-cost-notes.md    # Free tiers, prices, region and the cheapest Azure 
 docs/azure-cost-log.md      # Weekly record of Azure spending
 docs/azure-fundamentals.md  # Cloud concepts used in this project
 docs/azure-deployment.md    # How the app is deployed to Azure, redeployed and rolled back
+docs/storage.md             # Product images in Azure Blob Storage
+docs/database-hardening.md  # Database user, TLS verification and the backup restore drill
 Dockerfile                  # Recipe for the API's container image
 docker-compose.yml          # Runs the database, migrations and API together
 requirements.txt            # Packages the app needs to run
@@ -179,6 +187,8 @@ The app reads its configuration from environment variables, or from `.env` if pr
 | `ACCESS_TOKEN_EXPIRE_MINUTES` | Optional; how long a login token is valid (default 30) |
 | `POSTGRES_PASSWORD` | Docker Compose only: password of the database container it creates |
 | `API_PORT` | Docker Compose only, optional: host port for the API (default 8000) |
+| `AZURE_STORAGE_ACCOUNT_URL` | Optional: Blob Storage account for product images, e.g. `https://<account>.blob.core.windows.net`. When it is unset, image upload answers 503. Uses your `az login`, never a key. |
+| `AZURE_STORAGE_CONTAINER` | Optional: container name (default `product-images`) |
 
 ### 3. PostgreSQL (Docker)
 
@@ -252,7 +262,8 @@ Access: **public** means no login is needed, **user** means any logged-in user, 
 | GET    | `/products/{id}`          | public | Get one product                              |
 | POST   | `/products`               | admin  | Create a product (starts with 0 in stock)    |
 | PUT    | `/products/{id}`          | admin  | Replace a product                            |
-| DELETE | `/products/{id}`          | admin  | Delete a product and its stock record        |
+| DELETE | `/products/{id}`          | admin  | Delete a product, its stock record and its image |
+| POST   | `/products/{id}/image`    | admin  | Upload or replace the product image (JPEG, PNG or WebP, max 2 MB) |
 | GET    | `/categories`             | public | List categories                              |
 | GET    | `/categories/{id}`        | public | Get one category                             |
 | POST   | `/categories`             | admin  | Create a category (names must be unique)     |

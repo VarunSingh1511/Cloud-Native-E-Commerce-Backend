@@ -4,7 +4,7 @@ Project: **Cloud-Native E-Commerce Platform** (college mini project, Cloud Compu
 Full plan: `docs/PROJECT_PLAN.md`. Read it before planning any week's work.
 
 ## Current status
-- **Current week: 9** (Blob Storage + database hardening; PostgreSQL already exists since Week 8). Branch `week-9-storage`. **Cost rule applies: state the cost and get approval before creating each resource. Resource group `rg-ecom-mini`. The app and DB are in `malaysiawest`, the registry in `indiasouthcentral`; new resources default to `malaysiawest`, next to the app.**
+- **Current week: 10** (Terraform). Branch `week-10-terraform`. **Cost rule applies. The live environment is described in the Week 8 and Week 9 summaries; Terraform must describe it, and `destroy` must never remove the registry without the owner's OK.**
 - Week 1 done: in-memory product CRUD API.
 - Week 2 done (see "Week 2 summary").
 - Week 3 done (see "Week 3 summary").
@@ -13,6 +13,7 @@ Full plan: `docs/PROJECT_PLAN.md`. Read it before planning any week's work.
 - Week 6 done (see "Week 6 summary").
 - Week 7 done (see "Week 7 summary").
 - Week 8 done (see "Week 8 summary"). **The API is live on Azure.**
+- Week 9 done (see "Week 9 summary").
 - Update this section when a week is finished.
 
 ## Priorities (in order)
@@ -254,7 +255,9 @@ Images `08368f2`/`5fe4e16` predate `start.py` and are **not valid rollback targe
 Cost: B1 was used for 21 minutes (06:57–07:18 UTC, approved) after the F1 quota ran out; expected ≤ ₹1.73. Cost Management showed ₹0 for App Service, PG and ACR on day one. **Re-check 2026-10-21/22** and log it.
 
 Gotchas:
-- **Git Bash rewrites `/subscriptions/...` arguments**; run `export MSYS_NO_PATHCONV=1` before `az` commands that take resource IDs. Windows `az -o tsv` output ends lines with ``, so pipe it through `tr -d ''`.
+- **Git Bash rewrites `/subscriptions/...` arguments**; run `export MSYS_NO_PATHCONV=1` before `az` commands that take resource IDs. Windows `az -o tsv` output ends lines with `
+`, so pipe it through `tr -d '
+'`.
 - **CLI 2.90 argument names:**
   - `flexible-server db create --server-name --name`
   - `firewall-rule create --server-name --name <rule>`
@@ -264,6 +267,54 @@ Gotchas:
 - `az resource list -g rg-ecom-mini` sometimes returns nothing for these regions; use the per-service list commands.
 
 Scope cut or deferred: the owner's real admin is still to be created by the owner (interactive). Database hardening and Blob Storage are Week 9.
+(Update: the owner created their admin after Week 8.)
+
+## Week 9 summary (branch `week-9-storage`)
+Product images:
+- `POST /products/{id}/image` (admin, multipart field `file`).
+- `services/images.py`: magic-byte detection (JPEG/PNG/WebP), 2 MB limit read in chunks; anything else is 400.
+- `services/image_storage.py`:
+  - an `ImageStorage` protocol, and `AzureBlobImageStorage` using `DefaultAzureCredential` (managed identity on App Service, `az login` locally)
+  - `get_image_storage` (503 "Image storage is not configured" when `AZURE_STORAGE_ACCOUNT_URL` is unset) and `get_optional_image_storage` (for product delete)
+- Blob name `products/<id>/<uuid>.<ext>`, `Cache-Control: immutable`.
+- `set_product_image`: upload, commit, then best-effort delete of the old image. **If the commit fails, the new blob is deleted (compensating action; mutation-checked).** `delete_product` also deletes the image, best effort.
+- Migration 4 `85737df2c161` adds `products.image_url` (`String(500)`, nullable). `ProductResponse.image_url`.
+- New error `ServiceUnavailableError` (503).
+- New libraries, approved: `azure-storage-blob==12.31.0`, `azure-identity==1.26.0`. Settings: `azure_storage_account_url`, `azure_storage_container`.
+
+Azure (all ₹0):
+- Storage account `stecommini<sfx>`: `malaysiawest`, Standard_LRS, StorageV2, Hot, HTTPS only, TLS 1.2, **`allowSharedKeyAccess=false`**, blob public access allowed.
+- Container `product-images`, public access `blob` (no listing).
+- **Storage Blob Data Contributor scoped to the container** for the web app identity and the owner.
+- App settings `AZURE_STORAGE_ACCOUNT_URL`, `AZURE_STORAGE_CONTAINER`.
+- Live image `ecom-api:a88926b`.
+
+Database hardening:
+- `scripts/create_app_db_user.py`:
+  - creates or updates role **`ecom_app`** (LOGIN, no superuser/createdb/createrole)
+  - `GRANT ecom_app TO CURRENT_USER` (PG16 non-superuser rule)
+  - CONNECT + schema USAGE/CREATE
+  - ownership of all tables and enum types
+  - a re-run only changes the password (Azure refuses `ALTER ROLE ... NOSUPERUSER` from a non-superuser; a test covers this)
+- **App `DATABASE_URL` = `ecom_app` with `sslmode=verify-full&sslrootcert=/etc/ssl/certs/ca-certificates.crt`.** `sslrootcert=system` fails because `psycopg[binary]` bundles its own OpenSSL; it also fails on Windows.
+- **The admin password was rotated to a random value and not stored** (break-glass: `flexible-server update --admin-password`).
+- Verified:
+  - `pg_stat_activity` shows app connections as `ecom_app`, TLSv1.3
+  - a bare-IP connection is refused (hostname check)
+  - locally, `ecom_app` can migrate but cannot create roles or databases or read `pg_authid`
+- **Restore drill:**
+  - `flexible-server restore` took 431 s; the server existed 10 minutes, then was deleted
+  - data as of the restore point (pre-migration-4, owner admin present)
+  - firewall rules are copied to restored servers
+- Firewall re-checked: 31 rules = outbound IPs, no allow-all, no temp rules.
+
+Other:
+- **To create an admin on Azure now:** run `create_admin` **inside the deployed image** (`docker run --rm -it -e DATABASE_URL ...`) with a temporary firewall rule. Windows can't do verify-full with the Linux CA path. See `docs/azure-deployment.md`.
+- Tests: 187 pass (new: `test_images.py`, `test_product_images.py` with `FakeImageStorage`, `test_create_app_db_user.py`).
+- Docs: new `docs/storage.md` and `docs/database-hardening.md`; `azure-deployment.md`, cost notes and log, README updated.
+- Mistake caught and fixed: a scratch file briefly held an `ecom_app` connection string. It was deleted, and that password was replaced before use.
+
+Scope cut or deferred: no image resizing, CDN, Key Vault, Entra ID database login, or private networking (F1 can't use a VNet). Cost data for storage wasn't visible yet; recheck on 2026-10-22.
 
 ## Conventions
 - Type hints on all functions. Pydantic schemas are separate from SQLAlchemy models.
