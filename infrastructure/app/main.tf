@@ -26,7 +26,7 @@ resource "azurerm_service_plan" "main" {
   resource_group_name = local.foundation.resource_group_name
   location            = local.foundation.data_location # next to the database
   os_type             = "Linux"
-  sku_name            = "F1" # free tier: 60 CPU-minutes/day, no Always On
+  sku_name            = var.plan_sku # F1 (free) by default; see variables.tf
   tags                = local.foundation.tags
 }
 

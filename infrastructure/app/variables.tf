@@ -10,6 +10,15 @@ variable "name_suffix" {
   type        = string
 }
 
+variable "plan_sku" {
+  description = <<-EOT
+    App Service plan size. F1 is free (60 CPU-minutes/day). Use B1 (about INR 1.73/hour)
+    only temporarily and with the owner's approval, e.g. `-var plan_sku=B1`.
+  EOT
+  type        = string
+  default     = "F1"
+}
+
 variable "image_tag" {
   description = <<-EOT
     Image tag (git commit SHA) used when the web app is CREATED. Later deployments
