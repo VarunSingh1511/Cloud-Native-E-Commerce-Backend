@@ -48,7 +48,9 @@ class AzureBlobImageStorage:
             blob_name,
             data,
             overwrite=False,
-            content_settings=ContentSettings(content_type=content_type, cache_control=_CACHE_FOREVER),
+            content_settings=ContentSettings(
+                content_type=content_type, cache_control=_CACHE_FOREVER
+            ),
         )
         return blob.url
 
@@ -64,8 +66,20 @@ def _azure_storage(account_url: str, container_name: str) -> AzureBlobImageStora
     return AzureBlobImageStorage(account_url, container_name)
 
 
+def get_optional_image_storage() -> ImageStorage | None:
+    """FastAPI dependency: the configured image storage, or None if there is none.
+
+    Used where images are only cleaned up (deleting a product), so that this
+    still works when image storage is not configured.
+    """
+    if not settings.azure_storage_account_url:
+        return None
+    return _azure_storage(settings.azure_storage_account_url, settings.azure_storage_container)
+
+
 def get_image_storage() -> ImageStorage:
     """FastAPI dependency: the configured image storage, or 503 if there is none."""
-    if not settings.azure_storage_account_url:
+    storage = get_optional_image_storage()
+    if storage is None:
         raise ServiceUnavailableError("Image storage is not configured")
-    return _azure_storage(settings.azure_storage_account_url, settings.azure_storage_container)
+    return storage

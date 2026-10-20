@@ -34,3 +34,5 @@ class ProductResponse(BaseModel):
     price: float
     description: str
     category_id: int | None
+    # Public URL of the product image, or None if no image was uploaded.
+    image_url: str | None = None

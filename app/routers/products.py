@@ -1,6 +1,6 @@
 """Product REST endpoints backed by PostgreSQL."""
 
-from fastapi import APIRouter, Depends, Query, status
+from fastapi import APIRouter, Depends, File, Query, UploadFile, status
 from sqlalchemy.orm import Session
 
 from app.core.dependencies import ADMIN_ONLY_RESPONSES, require_admin
@@ -8,6 +8,7 @@ from app.db.session import get_db
 from app.models.product import Product
 from app.schemas.product import ProductCreate, ProductResponse, ProductUpdate
 from app.services import products as product_service
+from app.services.image_storage import ImageStorage, get_image_storage, get_optional_image_storage
 
 router = APIRouter(prefix="/products", tags=["Products"])
 
@@ -76,7 +77,36 @@ def update_product(
     responses={**NOT_FOUND_RESPONSE, **ADMIN_ONLY_RESPONSES},
     dependencies=[Depends(require_admin)],
 )
-def delete_product(product_id: int, db: Session = Depends(get_db)) -> dict[str, str]:
-    """Remove one product from the database."""
-    product_service.delete_product(db, product_id)
+def delete_product(
+    product_id: int,
+    db: Session = Depends(get_db),
+    storage: ImageStorage | None = Depends(get_optional_image_storage),
+) -> dict[str, str]:
+    """Remove one product from the database, and its image if it has one."""
+    product_service.delete_product(db, product_id, storage)
     return {"message": "Product deleted successfully"}
+
+
+@router.post(
+    "/{product_id}/image",
+    response_model=ProductResponse,
+    summary="Upload or replace a product's image",
+    responses={
+        **NOT_FOUND_RESPONSE,
+        **ADMIN_ONLY_RESPONSES,
+        400: {"description": "Not a JPEG, PNG or WebP image, empty, or larger than 2 MB"},
+        503: {"description": "Image storage is not configured"},
+    },
+    dependencies=[Depends(require_admin)],
+)
+def upload_product_image(
+    product_id: int,
+    file: UploadFile = File(description="JPEG, PNG or WebP image, at most 2 MB"),
+    db: Session = Depends(get_db),
+    storage: ImageStorage = Depends(get_image_storage),
+) -> Product:
+    """Store the image in Azure Blob Storage and save its public URL on the product.
+
+    Sent as multipart/form-data with the file in a field called `file`.
+    """
+    return product_service.set_product_image(db, storage, product_id, file.file)

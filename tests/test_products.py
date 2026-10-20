@@ -42,7 +42,7 @@ def test_create_product(admin_client: TestClient) -> None:
     assert response.status_code == 201
     body = response.json()
     assert isinstance(body["id"], int)
-    assert body == {"id": body["id"], "category_id": None, **VALID_PRODUCT}
+    assert body == {"id": body["id"], "category_id": None, "image_url": None, **VALID_PRODUCT}
 
 
 def test_created_product_is_saved_in_database(
@@ -69,7 +69,8 @@ def test_update_product(admin_client: TestClient) -> None:
     response = admin_client.put(f"/products/{created['id']}", json=payload)
 
     assert response.status_code == 200
-    assert response.json() == {"id": created["id"], "category_id": None, **payload}
+    expected = {"id": created["id"], "category_id": None, "image_url": None, **payload}
+    assert response.json() == expected
 
 
 # --- Products and categories ---
