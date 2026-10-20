@@ -111,3 +111,47 @@ jobs:
           done
           docker logs ecom-ci
           exit 1
+
+  deploy:
+    name: Deploy to Azure
+    needs: [test, terraform, image]
+    # Only a push to main deploys; pull requests stop after the checks above.
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    # The Azure identity trusts only jobs in this GitHub environment, and the
+    # environment accepts only the main branch (see docs/cicd.md).
+    environment: production
+    # One deploy at a time; a newer push waits instead of interrupting a deploy.
+    concurrency:
+      group: deploy-production
+      cancel-in-progress: false
+    permissions:
+      contents: read
+      id-token: write # lets the job ask GitHub for an OIDC token for Azure
+    env:
+      # Stored as secrets only so they appear as *** in the public logs.
+      ACR_NAME: ${{ secrets.ACR_NAME }}
+      WEBAPP_NAME: ${{ secrets.WEBAPP_NAME }}
+      RESOURCE_GROUP: rg-ecom-mini
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      # OIDC login: no password. Azure checks GitHub's signed token against the
+      # federated credential of the deploy identity (Terraform foundation layer).
+      - uses: azure/login@a641126d1b8aa4d1fa005f4f92df94a3a4c4c906 # v3.1.0
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Build and push the image (tag = short commit SHA)
+        run: |
+          image="$ACR_NAME.azurecr.io/ecom-api:${GITHUB_SHA::7}"
+          echo "IMAGE=$image" >> "$GITHUB_ENV"
+          az acr login --name "$ACR_NAME"
+          docker build -t "$image" .
+          docker push "$image"
+
+      - name: Deploy, wait until healthy, smoke test
+        run: bash scripts/deploy.sh "$IMAGE"

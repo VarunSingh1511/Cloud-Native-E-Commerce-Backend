@@ -1,0 +1,59 @@
+# Manual rollback (or roll forward): deploy an image that is already in the
+# registry, without building anything. Actions tab -> Rollback -> Run workflow.
+name: Rollback
+
+on:
+  workflow_dispatch:
+    inputs:
+      image_tag:
+        description: "Image tag to deploy (7-character commit SHA, e.g. a88926b)"
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  rollback:
+    name: Deploy existing image
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    environment: production # main branch only, same Azure trust as the deploy job
+    concurrency:
+      group: deploy-production
+      cancel-in-progress: false
+    permissions:
+      contents: read
+      id-token: write
+    env:
+      ACR_NAME: ${{ secrets.ACR_NAME }}
+      WEBAPP_NAME: ${{ secrets.WEBAPP_NAME }}
+      RESOURCE_GROUP: rg-ecom-mini
+      # The input goes through an environment variable, never pasted into the
+      # script itself, so a malicious value cannot inject shell commands.
+      IMAGE_TAG: ${{ inputs.image_tag }}
+    steps:
+      - name: Check the tag format
+        run: |
+          if [[ ! "$IMAGE_TAG" =~ ^[0-9a-f]{7}$ ]]; then
+            echo "image_tag must be a 7-character commit SHA, got: $IMAGE_TAG" >&2
+            exit 1
+          fi
+
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - uses: azure/login@a641126d1b8aa4d1fa005f4f92df94a3a4c4c906 # v3.1.0
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Check the image exists in the registry
+        run: |
+          image="$ACR_NAME.azurecr.io/ecom-api:$IMAGE_TAG"
+          echo "IMAGE=$image" >> "$GITHUB_ENV"
+          az acr login --name "$ACR_NAME"
+          docker manifest inspect "$image" > /dev/null
+
+      - name: Deploy, wait until healthy, smoke test
+        run: bash scripts/deploy.sh "$IMAGE"
