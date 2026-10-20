@@ -4,7 +4,7 @@ Project: **Cloud-Native E-Commerce Platform** (college mini project, Cloud Compu
 Full plan: `docs/PROJECT_PLAN.md`. Read it before planning any week's work.
 
 ## Current status
-- **Current week: 8** (Azure App Service deployment, F1 code deploy). Branch `week-8-app-service`. **Cost rule applies: state the cost and get approval before creating each resource; use region `indiasouthcentral` and resource group `rg-ecom-mini`.**
+- **Current week: 9** (Blob Storage + database hardening; PostgreSQL already exists since Week 8). Branch `week-9-storage`. **Cost rule applies: state the cost and get approval before creating each resource. Resource group `rg-ecom-mini`. The app and DB are in `malaysiawest`, the registry in `indiasouthcentral`; new resources default to `malaysiawest`, next to the app.**
 - Week 1 done: in-memory product CRUD API.
 - Week 2 done (see "Week 2 summary").
 - Week 3 done (see "Week 3 summary").
@@ -12,6 +12,7 @@ Full plan: `docs/PROJECT_PLAN.md`. Read it before planning any week's work.
 - Week 5 done (see "Week 5 summary"). The application features are complete; from Week 6 the work is DevOps and cloud.
 - Week 6 done (see "Week 6 summary").
 - Week 7 done (see "Week 7 summary").
+- Week 8 done (see "Week 8 summary"). **The API is live on Azure.**
 - Update this section when a week is finished.
 
 ## Priorities (in order)
@@ -214,6 +215,56 @@ Completed (all ₹0; details in `docs/azure-cost-notes.md`):
 
 Scope cut or deferred: none. Container vs code deploy is decided in Week 8 (a free Standard registry exists, but the default stays F1 code deploy).
 
+## Week 8 summary (branch `week-8-azure-deploy`)
+Owner decisions:
+- **Container deploy, not code deploy.**
+- **PostgreSQL moved forward from Week 9.**
+- **Registry: ACR Standard.** The owner accepts its ₹64/day if the free offer doesn't apply. **Do NOT delete the registry.**
+- **App + DB in Malaysia West**, because India South Central had no B1ms capacity in any zone (`RegionalAllocationFailed`).
+
+Resources in `rg-ecom-mini`. Names end in a random suffix; look them up with `az resource list -g rg-ecom-mini`, or by type with `az webapp list` / `az acr list` / `az postgres flexible-server list`. **Don't write the app name or URL into the repo.**
+- `acrecommini<sfx>`: ACR **Standard**, admin user disabled, `indiasouthcentral`. Repository `ecom-api`, tags = git short SHA.
+- `asp-ecom-mini`: App Service plan **F1 Linux** (shows as `LinuxFree`), `malaysiawest`. F1 accepts custom containers.
+- `app-ecom-mini-<sfx>`: the web app. **Live image `ecom-api:5d73b57` (v0.8.1).**
+  - system-assigned identity with **AcrPull** on the registry; `acrUseManagedIdentityCreds=true`
+  - HTTPS only, FTPS disabled, TLS 1.2, `healthCheckPath=/health`, container logging to the file system
+  - app settings: `DATABASE_URL` (`...?sslmode=require`), `SECRET_KEY` (production, random), `ENVIRONMENT=production`, `ACCESS_TOKEN_EXPIRE_MINUTES=30`, `WEBSITES_PORT=8000`
+  - **startup command `python -m app.scripts.start`**
+- `psql-ecom-mini-my-<sfx>`: PostgreSQL Flexible **B1ms**, v16, 32 GB with auto-grow off, 7-day backups, no HA or geo-backup, `require_secure_transport=on`, database `ecom`, admin `ecomadmin`. Public access is on, with **31 firewall rules `app-outbound-N` = exactly the web app's `possibleOutboundIpAddresses`** (no `0.0.0.0` allow-all rule).
+  - The admin password exists only inside `DATABASE_URL`; rotate it with `flexible-server update --admin-password`.
+  - A failed India attempt reserved the name `psql-ecom-mini-<sfx>`, hence the `-my-`.
+
+Code:
+- `app/scripts/start.py` runs `alembic upgrade head`, then `os.execvp` into uvicorn with `--proxy-headers --forwarded-allow-ips *`. Tests are in `tests/test_start.py`.
+  - It exists because **App Service splits its startup command on spaces and ignores quotes**, so `sh -c "..."` crash-looped with "Unterminated quoted string" (exit 2). That burned the F1 quota and gave `QuotaExceeded`.
+- `scripts/smoke_test.py` uses only the standard library and makes 10 checks, including HTTP→HTTPS for https URLs. It's reused by CI in Week 11.
+- The API version is 0.8.1.
+- 152 tests pass.
+
+Verified:
+- the same image against Azure PG, locally
+- the smoke test on the live HTTPS URL, 10/10 on both F1 and B1
+- the full shopping flow live; verification data was deleted afterwards
+- TLS (`pg_stat_ssl`); Alembic at head
+- redeploy → rollback → roll-forward drill (about 70–105 s each)
+- first start of a new image about 130 s; warm requests about 0.3 s
+
+Images `08368f2`/`5fe4e16` predate `start.py` and are **not valid rollback targets**; `82ab820` (0.8.0) is.
+
+Cost: B1 was used for 21 minutes (06:57–07:18 UTC, approved) after the F1 quota ran out; expected ≤ ₹1.73. Cost Management showed ₹0 for App Service, PG and ACR on day one. **Re-check 2026-10-21/22** and log it.
+
+Gotchas:
+- **Git Bash rewrites `/subscriptions/...` arguments**; run `export MSYS_NO_PATHCONV=1` before `az` commands that take resource IDs. Windows `az -o tsv` output ends lines with ``, so pipe it through `tr -d ''`.
+- **CLI 2.90 argument names:**
+  - `flexible-server db create --server-name --name`
+  - `firewall-rule create --server-name --name <rule>`
+  - `--database-name` is elastic-cluster only
+  - `--public-access None` disables public access
+- **`az webapp ssh` doesn't work**, because the image has no sshd. To create an admin on Azure: a temporary firewall rule plus `create_admin` run locally with `DATABASE_URL` set (see `docs/azure-deployment.md`).
+- `az resource list -g rg-ecom-mini` sometimes returns nothing for these regions; use the per-service list commands.
+
+Scope cut or deferred: the owner's real admin is still to be created by the owner (interactive). Database hardening and Blob Storage are Week 9.
+
 ## Conventions
 - Type hints on all functions. Pydantic schemas are separate from SQLAlchemy models.
 - Routers stay thin; business logic goes in `services/`. DB access via a session dependency (`get_db`).
@@ -245,6 +296,9 @@ docker compose exec api python -m app.scripts.create_admin you@example.com   # a
 az login                                # owner signs in (MFA); Claude then uses the CLI session
 az resource list -o table               # weekly: what exists in Azure (log totals in docs/azure-cost-log.md)
 az group delete -n rg-ecom-mini --yes   # EMERGENCY STOP: deletes everything in the project's resource group
+python scripts/smoke_test.py <url>      # check a deployment (local or https://<app>.azurewebsites.net)
+# deploy a new image: build in a clean worktree, tag = git short SHA; az acr login + docker push;
+# az webapp config container set --container-image-name <acr>.azurecr.io/ecom-api:<sha>; az webapp restart
 ```
 
 ## Workflow instructions for Claude
