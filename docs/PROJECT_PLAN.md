@@ -156,7 +156,15 @@ Done when: Azure ready, alerts on, and a confirmed zero-cost service list.
 
 Done when: public API reachable on Azure.
 
+**What actually happened in Week 8 (owner's decisions):**
+- **Container deploy instead of code deploy.** The Docker image is pushed to Azure Container Registry (Standard, free under the student offer) and run on App Service **F1**, which turned out to accept containers.
+- **Azure PostgreSQL was moved forward from Week 9**, so the live API works fully.
+- **The app and database run in Malaysia West**, because India South Central had no PostgreSQL B1ms capacity.
+
+See `docs/azure-deployment.md`.
+
 ### Week 9: Managed PostgreSQL + Blob Storage
+> PostgreSQL was already created and connected in Week 8. Week 9 therefore covers **database hardening** (backup and restore check, firewall review, connection settings) plus **Blob Storage**.
 - Learn: managed DBs, object storage, connection strings, secure config
 - Create Azure Database for PostgreSQL (B1ms, smallest storage), restrict network access, run Alembic migrations against it
 - If the free offer does not cover it, keep the server only for the sessions you need and destroy it afterwards (stopping it still bills storage). Do your DB-heavy testing locally first, then cloud-test briefly.

@@ -22,15 +22,20 @@ The credit (₹9,599) is **larger than our ₹5,000 cap**, so the credit alone w
 - **It is the only allowed region in India.** That gives the lowest latency for demos from India and keeps data in India.
 - **Price is not a reason to pick a different region.** The paid prices of the other four allowed regions are within about ±10%, and the free amounts apply in any region.
 
+**Week 8 update:**
+- Creating PostgreSQL B1ms in India South Central failed in all three zones with `RegionalAllocationFailed` (no capacity).
+- The owner chose to run **the web app and the database in Malaysia West** (`malaysiawest`, an allowed region), so they sit side by side.
+- The **container registry stayed in India South Central**. Images are only pulled when the app (re)starts.
+- Requests from India to Malaysia West take about 0.3 s.
 ## Service-by-service: free or not?
 Prices are from the Azure Retail Prices API in INR, for India South Central, on 2026-10-18. "Free" means it is covered by the Azure for Students free amounts shown in the portal under *Free services*.
 
 | Service | What we need | Free amount (portal) | Paid price if we go beyond it | Plan |
 | --- | --- | --- | --- | --- |
-| **App Service** | 1 small web API | Always free: **F1, up to 10 apps, 1 GB storage, 60 CPU-minutes a day** | B1 Linux ₹1.73/hour, about ₹1,260/month | **F1 with code deploy: ₹0** |
+| **App Service** | 1 small web API | Always free: **F1, up to 10 apps, 1 GB storage, 60 CPU-minutes a day** | B1 Linux ₹1.73/hour, about ₹1,260/month | **F1 running our Docker image: ₹0.** Week 8 confirmed that F1 Linux accepts custom containers. |
 | **PostgreSQL Flexible Server** | 1 tiny database | **750 hours a month of Burstable B1ms, 32 GB storage, 32 GB backup**, for 12 months | B1ms ₹2.35/hour, about ₹56/day; storage about ₹12.6/GiB-month | **B1ms, 32 GB, 7-day backups: ₹0.** 750 h covers a full month (at most 744 h) for **one** server. |
 | **Blob Storage** | A few product images | **5 GB** LRS hot, 20,000 reads and 10,000 writes a month | about ₹1.8/GB-month | **1 storage account, 1 container: ₹0** |
-| **Container Registry** | Optional (container deploy) | **1 Standard registry**, 100 GB | - | Decided in Week 8. Only useful if the App Service plan can run containers. |
+| **Container Registry** | Stores the Docker image (owner chose container deploy in Week 8) | **1 Standard registry**, 100 GB | **Standard ₹63.99/day** (about ₹1,920/month); Basic ₹15.99/day | **Standard, created in Week 8.** Cost Management showed ₹0 on day one. **The owner accepts this cost if the free offer turns out not to apply**, so the registry is kept either way. |
 | **Log Analytics / Application Insights** | Logs and metrics | First **5 GB a month** of ingestion is free | ₹309/GB after that | **Set a daily cap** (for example 0.1 GB) so we can never pay |
 | **Resource group, budgets, provider registration** | Organisation | Always free | - | ₹0 |
 
@@ -45,11 +50,12 @@ Prices are from the Azure Retail Prices API in INR, for India South Central, on 
 - **Any resource in another region:** the policy blocks this anyway.
 
 ## Cheapest path (the default for Weeks 8–12)
-1. **App Service F1** (Linux, Python), with **code deploy**: GitHub Actions pushes the code. **₹0.**
+1. **App Service F1** (Linux) running **our Docker image** from the registry. **₹0.** Week 8 changed this from code deploy at the owner's request: the same image runs locally and in Azure.
 2. **PostgreSQL Flexible Server B1ms**, 32 GB, 7-day backups, one server only. **₹0** within the 750 hours.
-3. **One Storage account** (Standard LRS) with one Blob container for product images. **₹0** within 5 GB.
-4. **Application Insights**, workspace-based, with a daily cap. **₹0** within 5 GB.
-5. From Week 10, Terraform creates and destroys everything, so the environment exists only when needed.
+3. **Container Registry, Standard**: **₹0** under the student offer, or ₹64/day otherwise (accepted by the owner).
+4. **One Storage account** (Standard LRS) with one Blob container for product images. **₹0** within 5 GB.
+5. **Application Insights**, workspace-based, with a daily cap. **₹0** within 5 GB.
+6. From Week 10, Terraform creates and destroys everything, so the environment exists only when needed.
 
 **Expected total: ₹0.** The budget catches mistakes.
 

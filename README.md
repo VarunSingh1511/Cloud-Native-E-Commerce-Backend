@@ -34,6 +34,10 @@ A cloud-native e-commerce backend built with FastAPI, developed as a Cloud Compu
   - Checked which Azure services the student subscription offers for free (App Service F1, PostgreSQL B1ms, 5 GB of Blob Storage), and chose the region India South Central.
   - Budget alerts are set at ₹500, ₹1,000, ₹2,500 and ₹4,000, and an empty, tagged resource group is ready for the deployment.
   - So far, Azure has cost ₹0.
+- **Week 8: Live on Azure.**
+  - The same Docker image that runs locally now runs on Azure App Service (free F1 tier), pulled from Azure Container Registry without any stored password (managed identity).
+  - It uses a managed Azure PostgreSQL database. The connection is encrypted, and only the app's own IP addresses are allowed through the firewall.
+  - The API is served over HTTPS. A smoke-test script checks any deployment, and redeploying or rolling back means pointing the app at another image tag.
 
 ## Technology
 
@@ -45,6 +49,7 @@ A cloud-native e-commerce backend built with FastAPI, developed as a Cloud Compu
 - Argon2 (password hashing) and PyJWT (access tokens)
 - pytest
 - Docker and Docker Compose
+- Azure: App Service, Container Registry, Database for PostgreSQL
 
 ## Project structure
 
@@ -63,7 +68,9 @@ app/
 ├── services/               # Business logic and database operations
 ├── routers/                # REST endpoints: health, auth, users, products, categories,
 │                           #   inventory, cart, orders
-└── scripts/create_admin.py # Command that creates the first admin user
+├── scripts/create_admin.py # Command that creates the first admin user
+└── scripts/start.py        # Container start command on Azure: migrate, then serve
+scripts/smoke_test.py       # Checks a running deployment (local or Azure)
 alembic/versions/           # Database migrations
 tests/                      # pytest suite (conftest.py holds shared fixtures)
 docs/database-design.md     # Tables, relationships and design decisions
@@ -73,6 +80,7 @@ docs/docker.md              # How the Docker image and Compose setup work
 docs/azure-cost-notes.md    # Free tiers, prices, region and the cheapest Azure setup
 docs/azure-cost-log.md      # Weekly record of Azure spending
 docs/azure-fundamentals.md  # Cloud concepts used in this project
+docs/azure-deployment.md    # How the app is deployed to Azure, redeployed and rolled back
 Dockerfile                  # Recipe for the API's container image
 docker-compose.yml          # Runs the database, migrations and API together
 requirements.txt            # Packages the app needs to run
@@ -292,6 +300,26 @@ Errors return JSON in the form `{"detail": "..."}`:
 | 404 | The resource in the URL does not exist, or it belongs to another customer (e.g. their order) |
 | 409 | The request conflicts with existing data, e.g. a duplicate category name, not enough stock at checkout, or a status change that is not allowed |
 | 422 | The request failed validation, e.g. a negative price or quantity |
+
+## Deployment to Azure
+
+The API runs on Azure as the same Docker image used locally:
+
+```text
+docker build ──► Azure Container Registry ──► App Service (Linux, F1) ──TLS──► Azure Database for PostgreSQL
+```
+
+- Each image is tagged with its git commit, so a deployment can always be traced back, and a rollback just points the app at an earlier tag.
+- Settings such as `DATABASE_URL` and `SECRET_KEY` are stored as App Service settings, never in the repository.
+- On start, the container applies any pending database migrations and then starts the API.
+
+Check a deployment with:
+
+```bash
+python scripts/smoke_test.py https://<your-app>.azurewebsites.net
+```
+
+The full set of commands, the design decisions, how to create an admin on Azure, and the free-tier limits are in [docs/azure-deployment.md](docs/azure-deployment.md). Costs are tracked in [docs/azure-cost-log.md](docs/azure-cost-log.md).
 
 ## Database migrations
 
