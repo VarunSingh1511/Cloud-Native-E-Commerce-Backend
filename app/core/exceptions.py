@@ -62,6 +62,12 @@ class ConflictError(AppError):
     status_code = 409
 
 
+class ServiceUnavailableError(AppError):
+    """A feature depends on something that is missing or down right now (503)."""
+
+    status_code = 503
+
+
 def app_error_handler(request: Request, exc: AppError) -> JSONResponse:
     """Convert an AppError into a JSON error response."""
     return JSONResponse(
