@@ -7,6 +7,9 @@ on:
     branches: [main]
   push:
     branches: [main]
+  # Manual "Run workflow" button (Actions -> CI/CD): the full pipeline on demand,
+  # e.g. when GitHub missed a push event (Week 12) or to redeploy main for a demo.
+  workflow_dispatch:
 
 # Least privilege: jobs can only read the repository unless they ask for more.
 permissions:
@@ -115,8 +118,9 @@ jobs:
   deploy:
     name: Deploy to Azure
     needs: [test, terraform, image]
-    # Only a push to main deploys; pull requests stop after the checks above.
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    # Only main deploys (a push, or the manual button run on main); pull requests
+    # stop after the checks above.
+    if: github.ref == 'refs/heads/main' && (github.event_name == 'push' || github.event_name == 'workflow_dispatch')
     runs-on: ubuntu-24.04
     timeout-minutes: 20
     # The Azure identity trusts only jobs in this GitHub environment, and the
