@@ -69,9 +69,10 @@ resource "azurerm_linux_web_app" "api" {
   }
 
   # App settings become environment variables inside the container, which
-  # app/core/config.py reads.
+  # app/core/config.py reads. Values read from the foundation's state lose their
+  # "sensitive" mark, so sensitive() hides them from plan output again.
   app_settings = {
-    DATABASE_URL                        = local.foundation.app_database_url
+    DATABASE_URL                        = sensitive(local.foundation.app_database_url)
     SECRET_KEY                          = random_password.secret_key.result
     ENVIRONMENT                         = "production"
     ACCESS_TOKEN_EXPIRE_MINUTES         = "30"
@@ -79,6 +80,11 @@ resource "azurerm_linux_web_app" "api" {
     WEBSITES_ENABLE_APP_SERVICE_STORAGE = "false"
     AZURE_STORAGE_ACCOUNT_URL           = local.foundation.storage_account_url
     AZURE_STORAGE_CONTAINER             = local.foundation.images_container_name
+    # Application Insights (app/core/telemetry.py). The app authenticates with its
+    # managed identity; key authentication is disabled (see monitoring.tf).
+    APPLICATIONINSIGHTS_CONNECTION_STRING = sensitive(local.foundation.application_insights_connection_string)
+    # Do not record App Service's health probe (once a minute) as telemetry.
+    OTEL_PYTHON_FASTAPI_EXCLUDED_URLS = "/health$"
   }
 
   logs {

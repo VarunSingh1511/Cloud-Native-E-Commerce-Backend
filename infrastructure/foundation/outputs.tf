@@ -51,6 +51,24 @@ output "github_deploy_principal_id" {
   value       = azurerm_user_assigned_identity.github_deploy.principal_id
 }
 
+output "log_analytics_workspace_id" {
+  value = azurerm_log_analytics_workspace.main.id
+}
+
+output "application_insights_id" {
+  value = azurerm_application_insights.main.id
+}
+
+output "alert_action_group_id" {
+  value = azurerm_monitor_action_group.owner_email.id
+}
+
+# Not a password (key authentication is disabled), but kept out of plan output anyway.
+output "application_insights_connection_string" {
+  sensitive = true
+  value     = azurerm_application_insights.main.connection_string
+}
+
 # --- secrets: marked sensitive, so Terraform never prints them ---------------
 
 output "app_database_url" {
