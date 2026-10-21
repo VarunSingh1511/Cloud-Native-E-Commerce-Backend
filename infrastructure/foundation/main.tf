@@ -143,3 +143,34 @@ resource "azurerm_storage_container" "product_images" {
     prevent_destroy = true
   }
 }
+
+# ------------------------------------------------- GitHub Actions deploy identity
+# GitHub Actions logs in as this identity with OIDC: GitHub signs a short-lived
+# token for each workflow run, and Azure accepts it only when its subject matches
+# the federated credential below. No password or key is stored anywhere.
+# It lives in the foundation layer so its client ID (a GitHub secret) never changes.
+resource "azurerm_user_assigned_identity" "github_deploy" {
+  name                = "id-ecom-mini-github-deploy"
+  resource_group_name = azurerm_resource_group.main.name
+  location            = var.registry_location
+  tags                = var.tags
+}
+
+resource "azurerm_federated_identity_credential" "github_production" {
+  name                      = "github-production"
+  user_assigned_identity_id = azurerm_user_assigned_identity.github_deploy.id
+  issuer                    = "https://token.actions.githubusercontent.com"
+  audience                  = ["api://AzureADTokenExchange"]
+  # Only jobs that use the "production" environment of this repository. GitHub
+  # lets that environment deploy from the main branch only (repository settings).
+  subject = "repo:${var.github_repository}:environment:production"
+}
+
+# Push (and pull) images in this registry, nothing else. The right to change the
+# web app is granted in the app layer, together with the web app itself.
+resource "azurerm_role_assignment" "github_registry_push" {
+  scope                = azurerm_container_registry.main.id
+  role_definition_name = "AcrPush"
+  principal_id         = azurerm_user_assigned_identity.github_deploy.principal_id
+  principal_type       = "ServicePrincipal"
+}
