@@ -234,15 +234,22 @@ main ─► same checks ─► build ─► push ecom-api:<git sha> ─► point
 - **Sample error:** an admin-only endpoint that fails on purpose. Verified live: the 500 and its full traceback appeared in Log Analytics, and the "Fired" and "Resolved" alert emails arrived.
 - **Cost:** a daily ingestion cap of 0.1 GB keeps logs below the free 5 GB a month.
 
-### 5.9 Testing
-- **196 automated tests** (pytest) against a real PostgreSQL test database. They run on every pull request. Coverage per endpoint and status code: [testing.md](testing.md).
+### 5.9 Web frontend: DRIPPY ([frontend.md](frontend.md))
+- **What it is:** a one-page demo clothing shop at `/shop/`, served by the same app. It's plain HTML, CSS and JavaScript, with no framework or build step and no backend change.
+- **What a visitor can do:** browse by category, pick a size, sign up or sign in, use a slide-in bag, check out, and see order history. The footer shows the live API version and the `/health/ready` status.
+- **Sizes S/M/L** are separate products (`<garment> - M`) with their own stock, grouped into one card by the page.
+- **Demo data:** `scripts/seed_demo.py` creates the catalogue through the API and uploads the product photos to Blob Storage.
+- **Security:** API data is written with `textContent` only (no `innerHTML`), behind a strict Content-Security-Policy with no inline scripts. Both are enforced by tests.
+
+### 5.10 Testing
+- **205 automated tests** (pytest) against a real PostgreSQL test database. They run on every pull request. Coverage per endpoint and status code: [testing.md](testing.md).
 - **Database setup:** the real migrations are applied once per run, and every test runs inside a transaction that is rolled back, so tests are independent and repeatable.
 - **Coverage:** success paths **and** negative cases: 401, 403, 404, 409, 422, empty cart, insufficient stock, forbidden status changes, files with fake extensions, and database constraint violations tested directly.
 - **Failure paths proven with forced errors:** checkout rollback and the image compensating delete, both mutation-checked (the test fails if the protection is removed).
 - **Azure is never contacted by tests.** Blob Storage and telemetry are replaced by fakes.
 - **After every deploy, `scripts/smoke_test.py`** checks the live system with 10 checks: health, readiness, docs, product list, register, login, current user, permissions, and the HTTP → HTTPS redirect.
 
-### 5.10 Cost control ([azure-cost-notes.md](azure-cost-notes.md), [azure-cost-log.md](azure-cost-log.md))
+### 5.11 Cost control ([azure-cost-notes.md](azure-cost-notes.md), [azure-cost-log.md](azure-cost-log.md))
 - **Budget** `ecom-mini-budget` (₹5,000 a year), with email alerts at ₹500, ₹1,000, ₹2,500 and ₹4,000, plus a forecast alert.
 - **Every resource on its free tier**, tagged `project=ecom-mini`, with a weekly cost log.
 - **Paid capacity only briefly, with approval:** B1 for 21 minutes in Week 8 and 1.2 hours in Week 10, about ₹2–5 in total.
@@ -285,7 +292,7 @@ main ─► same checks ─► build ─► push ecom-api:<git sha> ─► point
 | --- | --- |
 | [README.md](../README.md) | Overview, progress by week, how to run locally (Docker Compose or Python), endpoints |
 | `app/` | The FastAPI application (routers, services, models, schemas, core) |
-| `tests/` | 196 automated tests |
+| `tests/` | 205 automated tests |
 | `alembic/` | Database migrations |
 | `infrastructure/` | Terraform: `foundation/` and `app/` layers, plus a runbook |
 | `.github/workflows/` | CI/CD pipeline and rollback workflow |
