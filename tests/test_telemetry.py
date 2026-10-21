@@ -24,7 +24,13 @@ def calls(monkeypatch: pytest.MonkeyPatch) -> Iterator[list[dict[str, Any]]]:
 
 
 def has_opentelemetry_middleware(app: FastAPI) -> bool:
-    return any("OpenTelemetry" in str(middleware.cls) for middleware in app.user_middleware)
+    """Whether OpenTelemetry is one of the layers every request passes through."""
+    layer: Any = app.build_middleware_stack()
+    while layer is not None:
+        if type(layer).__name__ == "OpenTelemetryMiddleware":
+            return True
+        layer = getattr(layer, "app", None)  # each middleware wraps the next one
+    return False
 
 
 def test_telemetry_is_off_without_connection_string(
