@@ -14,14 +14,14 @@ from app.routers.orders import router as orders_router
 from app.routers.products import router as products_router
 from app.routers.users import router as users_router
 
-# Before the app is created, so Application Insights records its requests.
-configure_telemetry()
-
 app = FastAPI(
     title="Cloud E-Commerce API",
     description="Cloud-native e-commerce backend built with FastAPI.",
     version="1.0.0",
 )
+
+# Application Insights, only when its connection string is set (on Azure).
+configure_telemetry(app)
 
 # Any AppError raised during a request (e.g. NotFoundError) becomes a JSON error response.
 app.add_exception_handler(AppError, app_error_handler)
