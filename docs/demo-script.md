@@ -13,10 +13,7 @@ The demo shows the shop working, then how a change reaches production, then the 
    # app/main.py: version="1.0.0" -> version="1.0.1"
    git commit -am "Bump API version to 1.0.1"
    ```
-3. Make sure the catalogue has something to buy. As admin in `/docs`:
-   - create a category
-   - create two products, for example "Laptop" at 45,000 and "Mouse" at 799
-   - set their stock: **Laptop 2**, Mouse 20
+3. Make sure the DRIPPY catalogue exists: `python scripts/seed_demo.py https://<app>.azurewebsites.net <admin e-mail>`. It runs once and skips anything that already exists. If the rehearsal used up stock, reset it as admin with `PUT /inventory/{id}`, for example Heavyweight Hoodie - M back to **2**.
 4. Take screenshots of: Swagger, a green pipeline run, Application Insights → Failures, the alert e-mails, and the resource group. Most of these are also in the report.
 
 **30 minutes before**
@@ -27,25 +24,40 @@ The demo shows the shop working, then how a change reaches production, then the 
 | F1 quota not used up | `/health` answers 200, not 403 "Site Disabled" | The free tier has 60 CPU-minutes a day, reset 05:30 IST. Don't deploy repeatedly on demo day. |
 | Pipeline is green | GitHub → Actions: the latest run on `main` is green | So the live version is known |
 | Terraform matches Azure | `terraform -chdir=infrastructure/foundation plan` and the same for `app`: both say "No changes" | Shows the infrastructure is exactly the code |
-| Tabs open | `/docs`; GitHub repo; Actions; Azure portal (resource group, Application Insights, Log Analytics) | No searching during the demo |
+| Tabs open | `/shop/`; `/docs`; GitHub repo; Actions; Azure portal (resource group, Application Insights, Log Analytics) | No searching during the demo |
 | Local stack (optional database check) | Docker Desktop running; `docker compose up -d` | For part 3, option B |
 
 ## 1. What it is (1 min)
-Show the README or Fig. 2.1 of the report, and say:
+Show DRIPPY's front page, then the README or Fig. 2.1 of the report, and say:
 > "An e-commerce backend in FastAPI and PostgreSQL, deployed as a Docker container on Azure App Service. The whole environment is Terraform code, every merge to main is tested and deployed by GitHub Actions without any stored password, and it's monitored with Application Insights. It all runs on free tiers."
 
-## 2. Shopping flow on the live API (4 min)
-In `/docs`:
-1. **Register** with `POST /auth/register` (a new e-mail address). Returns 201, role CUSTOMER.
-2. **Log in:** click **Authorize** and enter that e-mail and password.
-3. **Browse** with `GET /products?q=lap`, to show search.
-4. **Add to cart** with `POST /cart/items` (Laptop, quantity 1), then **view the cart** with `GET /cart`: current price, exact total.
-5. **Check out** with `POST /orders`. Returns **201**: the order copies the name and price paid.
-6. **Stock went down:** `GET /inventory/{laptop id}` now shows **1**.
-7. **The transaction protects stock:** add 5 laptops to the cart, then `POST /orders` → **409** "Not enough stock for 'Laptop' (requested 5, available 1)". Nothing changed. Remove the line again with `DELETE /cart/items/{id}`.
-8. **Roles:** as the customer, `POST /products` → **403**. Click **Authorize**, log out, and log in as your **admin**. Then `PATCH /orders/{id}/status` with `SHIPPED` → 200, and `GET /orders` shows every customer's orders.
+## 2. Shopping in DRIPPY, then the API underneath (5 min)
+**In DRIPPY** (`/shop/`), the customer's view:
+1. Point out:
+   - the live stock badges ("Only 2 left") and the crossed-out sold-out size
+   - the footer's green dot, "API v… live · database connected", which is `/health/ready` checking the database
+2. On **Heavyweight Hoodie**, pick **M** → **Add to bag**. The sign-in dialog opens. **Create account** with a new e-mail address, and the hoodie lands in the bag.
+3. Add a **Varsity Bomber**, then open the **bag**: photos, sizes and the exact total.
+4. **Checkout** → "Order #N placed". The hoodie card now shows **"Only 1 left"**: stock went down in the same transaction.
+5. **My orders** (click your e-mail address) shows the order as **Placed**.
 
-What to say: checkout is one database transaction. It locks the stock rows in a fixed order (so no deadlock), checks every line, then commits, or rolls back everything. Two customers buying the last unit at the same moment get one order and one 409; there's an automated test for exactly that.
+**In Swagger** (`/docs`), the same API as raw HTTP:
+
+6. **The transaction protects stock.**
+   1. Authorize as that customer.
+   2. `POST /cart/items` five units of the **"Heavyweight Hoodie - M"** product.
+   3. `POST /orders` → **409** "Not enough stock for 'Heavyweight Hoodie - M' (requested 5, available 1)". Nothing changed.
+   4. Remove the line again with `DELETE /cart/items/{id}`.
+7. **Roles.**
+   1. As the customer, `POST /products` → **403**.
+   2. Click **Authorize**, log out, and log in as your **admin**.
+   3. `PATCH /orders/{id}/status` with `SHIPPED` → 200.
+   4. Back in DRIPPY, **My orders** now shows **Shipped**.
+
+What to say:
+- DRIPPY is plain HTML and JavaScript calling exactly this API. Sizes are separate products, so stock is tracked per size.
+- Checkout is one database transaction. It locks the stock rows in a fixed order (so no deadlock), checks every line, then commits, or rolls back everything.
+- Two customers buying the last unit at the same moment get one order and one 409. There's an automated test for exactly that.
 
 ## 3. Database check (1–2 min)
 **A. Live, without opening the database.**
@@ -99,7 +111,7 @@ What to say: the app authenticates to Application Insights with its managed iden
 
 ## 7. Repository tour (1 min)
 - **README:** what it is, how to run it, progress by week.
-- **`tests/`:** 196 tests; `docs/testing.md` has the endpoint × status-code matrix.
+- **`tests/`:** 205 tests; `docs/testing.md` has the endpoint × status-code matrix.
 - **`.github/workflows/`:** `ci-cd.yml` and `rollback.yml`.
 - **`docs/`:** one design note per topic, and the cost log.
 

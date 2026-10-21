@@ -1,6 +1,6 @@
 # Testing (Week 12 final check)
 
-**196 automated tests**, run on every pull request (see [cicd.md](cicd.md)). Run them locally with `pytest`; it needs the `ecom-db` container.
+**205 automated tests**, run on every pull request (see [cicd.md](cicd.md)). Run them locally with `pytest`; it needs the `ecom-db` container.
 
 ## How the tests work
 - **Real PostgreSQL, not a stand-in.** `tests/conftest.py` points the app at the separate `ecom_test` database and applies the real Alembic migrations once per run. Constraints, enums and migrations are therefore tested exactly as they run in production.
@@ -47,6 +47,7 @@
 - **Scripts:** the `start.py` start-up, `create_admin` and `create_app_db_user`.
 - **Telemetry:** off by default; uses the Azure identity; attached to the app.
 - **An end-to-end shopping test.**
+- **The DRIPPY demo shop** (`tests/test_frontend.py`): the page is served; strict CSP with no inline scripts; no HTML-writing calls in `app.js`; API and `/docs` unaffected; path traversal returns 404; the seed catalogue is complete. The browser flow was also driven in headless Edge with 17 checks (see [frontend.md](frontend.md)).
 
 ## Tests that prove a failure is handled
 

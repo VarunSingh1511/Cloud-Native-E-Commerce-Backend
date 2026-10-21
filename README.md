@@ -57,8 +57,9 @@ A cloud-native e-commerce backend built with FastAPI, developed as a Cloud Compu
 - **Week 12: Monitoring, final testing and documentation.**
   - Every request, its duration and every error with its stack trace go to Azure Application Insights. The app authenticates with its own Azure identity, so no keys are needed.
   - The platform's own logs go to Log Analytics, and an e-mail alert fires when the API returns a server error. Log volume is capped, so monitoring stays free.
-  - New tests prove that two customers buying the last item at the same moment get one order and one "out of stock", and that role changes apply immediately (196 tests).
+  - New tests prove that two customers buying the last item at the same moment get one order and one "out of stock", and that role changes apply immediately (205 tests).
   - A technical design document, a test-coverage matrix and a demo script.
+  - **DRIPPY**, a one-page demo clothing shop at `/shop/`: browse, pick a size (S/M/L), sign up, bag, checkout and order history, all through the same REST API. Product photos are served from Azure Blob Storage.
 
 ## Technology
 
@@ -96,6 +97,7 @@ app/
 └── scripts/start.py        # Container start command on Azure: migrate, then serve
 scripts/smoke_test.py       # Checks a running deployment (local or Azure)
 scripts/create_app_db_user.py # Creates the limited database user the app connects as
+scripts/seed_demo.py        # Fills a deployment with the DRIPPY demo catalogue and photos
 scripts/deploy.sh           # Points the web app at an image, waits until healthy, smoke tests (used by CI)
 alembic/versions/           # Database migrations
 tests/                      # pytest suite (conftest.py holds shared fixtures)
@@ -115,6 +117,7 @@ docs/monitoring.md          # Application Insights, platform logs, the error ale
 docs/testing.md             # How the tests work and which responses each endpoint is tested for
 docs/technical-design.md    # The whole design in one document
 docs/demo-script.md         # A 15-minute walkthrough of the live system
+docs/frontend.md            # DRIPPY, the demo shop: what it does and how it uses the API
 .github/workflows/          # ci-cd.yml (test, build, deploy) and rollback.yml
 infrastructure/             # Terraform: foundation/ (protected) and app/ (rebuildable), see its README
 Dockerfile                  # Recipe for the API's container image
@@ -255,7 +258,7 @@ You will be asked for a password twice; nothing is shown as you type. If the ema
 uvicorn app.main:app --reload
 ```
 
-The API is available at `http://127.0.0.1:8000`. Data is stored in PostgreSQL, so it survives application restarts.
+The API is available at `http://127.0.0.1:8000`, and the DRIPPY demo shop at `http://127.0.0.1:8000/shop/`. Data is stored in PostgreSQL, so it survives application restarts. To fill the shop with the demo catalogue, run `python scripts/seed_demo.py http://127.0.0.1:8000 <admin-email>`; locally, without Blob Storage, the products appear without photos.
 
 ## API documentation
 
