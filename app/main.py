@@ -1,6 +1,9 @@
 """FastAPI application entry point: creates the app and registers routers."""
 
+from pathlib import Path
+
 from fastapi import FastAPI
+from fastapi.staticfiles import StaticFiles
 
 from app.core.exceptions import AppError, app_error_handler
 from app.core.telemetry import configure_telemetry
@@ -35,3 +38,8 @@ app.include_router(inventory_router)
 app.include_router(cart_router)
 app.include_router(orders_router)
 app.include_router(diagnostics_router)
+
+# DRIPPY demo shop: static HTML/CSS/JS that calls the API above. Mounted under its
+# own prefix (and after the routers), so it can never hide an API route.
+SHOP_DIR = Path(__file__).parent / "static" / "shop"
+app.mount("/shop", StaticFiles(directory=SHOP_DIR, html=True), name="shop")

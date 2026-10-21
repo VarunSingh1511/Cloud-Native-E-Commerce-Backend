@@ -1,0 +1,157 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <!-- Only this site's own scripts, styles and API; images also from Azure Blob Storage.
+       No inline scripts are allowed, so injected markup could never run code. -->
+  <meta http-equiv="Content-Security-Policy"
+        content="default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data: https://*.blob.core.windows.net; connect-src 'self'; base-uri 'none'; form-action 'self'; object-src 'none'">
+  <title>DRIPPY · Fresh drops</title>
+  <meta name="description" content="DRIPPY: a demo clothing shop running on a cloud-native FastAPI backend on Microsoft Azure.">
+  <link rel="icon" href="data:,">
+  <link rel="stylesheet" href="styles.css">
+  <script src="app.js" defer></script>
+</head>
+<body>
+  <header class="topbar">
+    <a class="wordmark" href="#top" aria-label="DRIPPY home">DRIPPY</a>
+    <nav class="chips" id="category-chips" aria-label="Categories"></nav>
+    <div class="topbar-actions">
+      <button class="ghost-btn" id="account-btn" type="button">Sign in</button>
+      <button class="bag-btn" id="bag-btn" type="button" aria-label="Open bag">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 7h12l-1 13H7L6 7Zm3 0a3 3 0 0 1 6 0" /></svg>
+        <span class="bag-count" id="bag-count" hidden>0</span>
+      </button>
+    </div>
+  </header>
+
+  <main id="top">
+    <section class="hero">
+      <div class="hero-text">
+        <p class="eyebrow">Drop 01 · Autumn 2026</p>
+        <h1>Fresh drops.<br><span class="accent">Zero drama.</span></h1>
+        <p class="lede">Heavyweight basics and statement outerwear. Pick your size, check out in seconds.</p>
+        <a class="cta" href="#shop">Shop the drop <span aria-hidden="true">→</span></a>
+      </div>
+      <div class="hero-art" id="hero-art" aria-hidden="true"></div>
+      <span class="hero-outline" aria-hidden="true">DRIPPY</span>
+    </section>
+
+    <div class="ticker" aria-hidden="true">
+      <div class="ticker-track">
+        <span>NEW DROP</span><span>★</span><span>LIVE ON MICROSOFT AZURE</span><span>★</span>
+        <span>DEPLOYED BY GITHUB ACTIONS</span><span>★</span><span>S · M · L</span><span>★</span>
+        <span>NEW DROP</span><span>★</span><span>LIVE ON MICROSOFT AZURE</span><span>★</span>
+        <span>DEPLOYED BY GITHUB ACTIONS</span><span>★</span><span>S · M · L</span><span>★</span>
+      </div>
+    </div>
+
+    <section class="shop" id="shop">
+      <div class="shop-head">
+        <h2>The Drop</h2>
+        <p class="muted" id="shop-count"></p>
+      </div>
+      <div class="grid" id="product-grid" aria-live="polite">
+        <p class="muted loading" id="grid-message">Loading the drop…</p>
+      </div>
+    </section>
+  </main>
+
+  <footer class="footer">
+    <span class="wordmark small">DRIPPY</span>
+    <p class="muted">A demo shop for the Cloud-Native E-Commerce Platform: FastAPI · PostgreSQL · Azure App Service · GitHub Actions</p>
+    <p class="status" id="api-status"><span class="dot"></span><span id="api-status-text">Checking API…</span></p>
+  </footer>
+
+  <!-- Bag drawer -->
+  <div class="overlay" id="overlay" hidden></div>
+  <aside class="drawer" id="drawer" aria-label="Your bag" aria-hidden="true">
+    <div class="drawer-head">
+      <h2>Your bag</h2>
+      <button class="icon-btn" id="drawer-close" type="button" aria-label="Close bag">✕</button>
+    </div>
+    <div class="drawer-body" id="drawer-body"></div>
+    <div class="drawer-foot" id="drawer-foot">
+      <div class="total-row"><span>Total</span><strong id="bag-total">₹0</strong></div>
+      <button class="primary-btn" id="checkout-btn" type="button">Checkout</button>
+      <p class="fine-print">Stock is checked and reserved the moment you check out.</p>
+    </div>
+  </aside>
+
+  <!-- Sign in / create account -->
+  <dialog class="modal" id="auth-dialog">
+    <form class="modal-inner" id="auth-form" novalidate>
+      <button class="icon-btn modal-close" id="auth-close" type="button" aria-label="Close">✕</button>
+      <span class="wordmark small">DRIPPY</span>
+      <div class="tabs" role="tablist">
+        <button type="button" class="tab active" id="tab-login" role="tab" aria-selected="true">Sign in</button>
+        <button type="button" class="tab" id="tab-register" role="tab" aria-selected="false">Create account</button>
+      </div>
+      <label>Email<input type="email" id="auth-email" autocomplete="email" required></label>
+      <label>Password<input type="password" id="auth-password" autocomplete="current-password" minlength="8" required></label>
+      <p class="form-error" id="auth-error" role="alert"></p>
+      <button class="primary-btn" id="auth-submit" type="submit">Sign in</button>
+    </form>
+  </dialog>
+
+  <!-- My orders -->
+  <dialog class="modal" id="orders-dialog">
+    <div class="modal-inner wide">
+      <form method="dialog"><button class="icon-btn modal-close" aria-label="Close">✕</button></form>
+      <h2 id="orders-title">My orders</h2>
+      <div class="orders" id="orders-list"></div>
+      <button class="ghost-btn signout" id="signout-btn" type="button">Sign out</button>
+    </div>
+  </dialog>
+
+  <div class="toasts" id="toasts" aria-live="polite"></div>
+
+  <!-- Templates: copied by app.js and filled with textContent only -->
+  <template id="card-template">
+    <article class="card">
+      <div class="card-media">
+        <img alt="" loading="lazy">
+        <span class="badge" hidden></span>
+      </div>
+      <div class="card-body">
+        <div class="card-title-row">
+          <h3 class="card-title"></h3>
+          <span class="price"></span>
+        </div>
+        <p class="card-desc muted"></p>
+        <div class="sizes" role="group" aria-label="Size"></div>
+        <button class="add-btn" type="button">Add to bag</button>
+      </div>
+    </article>
+  </template>
+
+  <template id="line-template">
+    <div class="line">
+      <img alt="">
+      <div class="line-info">
+        <strong class="line-name"></strong>
+        <span class="line-meta muted"></span>
+        <div class="line-actions">
+          <span class="qty"></span>
+          <button class="mini-btn plus" type="button" aria-label="Add one more">+</button>
+          <button class="link-btn remove" type="button">Remove</button>
+        </div>
+      </div>
+      <span class="line-total"></span>
+    </div>
+  </template>
+
+  <template id="order-template">
+    <div class="order">
+      <div class="order-head">
+        <strong class="order-id"></strong>
+        <span class="pill"></span>
+      </div>
+      <p class="order-date muted"></p>
+      <ul class="order-items"></ul>
+      <p class="order-total"></p>
+    </div>
+  </template>
+</body>
+</html>
