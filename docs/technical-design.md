@@ -252,7 +252,7 @@ main ─► same checks ─► build ─► push ecom-api:<git sha> ─► point
 ### 5.11 Cost control ([azure-cost-notes.md](azure-cost-notes.md), [azure-cost-log.md](azure-cost-log.md))
 - **Budget** `ecom-mini-budget` (₹5,000 a year), with email alerts at ₹500, ₹1,000, ₹2,500 and ₹4,000, plus a forecast alert.
 - **Every resource on its free tier**, tagged `project=ecom-mini`, with a weekly cost log.
-- **Paid capacity only briefly, with approval:** B1 for 21 minutes in Week 8 and 1.2 hours in Week 10, about ₹2–5 in total.
+- **Paid capacity only briefly, with approval:** B1 for 21 minutes in Week 8 and 1.2 hours in Week 10. **Actual total cost of the project: ₹2.53** (Azure Cost Management, 22 Oct 2026). PostgreSQL, the container registry, storage and monitoring all came to ₹0 under the free offers.
 - **Rejected for cost:** availability ping tests (₹170+ a month), always-on compute, geo-redundant backups.
 - **Emergency stop:** delete the resource group.
 

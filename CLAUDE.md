@@ -4,7 +4,7 @@ Project: **Cloud-Native E-Commerce Platform** (college mini project, Cloud Compu
 Full plan: `docs/PROJECT_PLAN.md`. Read it before planning any week's work.
 
 ## Current status
-- **All 12 weeks are done; the project is complete.** Open follow-ups: the cost recheck on 2026-10-22 (log it, then put the final total in the Word report and in `docs/technical-design.md`); the owner adds names, registration numbers, the date and 4 screenshots to the Word report (yellow placeholders); after submission, teardown per `infrastructure/README.md` (owner decides). Any further change still follows the rules below: plan first, cost rule, PR → green checks → owner merges, infra only through Terraform.
+- **All 12 weeks are done; the project is complete.** **Cost recheck done 2026-10-22: total ₹2.53** (B1 only; PG, ACR, storage, monitoring ₹0 under free offers). Open follow-ups: the owner adds names, registration numbers, the date and 4 screenshots to the Word report (yellow placeholders); after submission, teardown per `infrastructure/README.md` (owner decides). Any further change still follows the rules below: plan first, cost rule, PR → green checks → owner merges, infra only through Terraform.
 - Week 1 done: in-memory product CRUD API.
 - Week 2 done (see "Week 2 summary").
 - Week 3 done (see "Week 3 summary").
