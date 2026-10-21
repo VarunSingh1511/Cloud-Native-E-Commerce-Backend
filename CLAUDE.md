@@ -4,7 +4,7 @@ Project: **Cloud-Native E-Commerce Platform** (college mini project, Cloud Compu
 Full plan: `docs/PROJECT_PLAN.md`. Read it before planning any week's work.
 
 ## Current status
-- **Current week: 12** (Monitoring, final testing, Technical Design Document, demo). Branch `week-12-final`. **Cost rule applies** (Application Insights / Log Analytics: check the free 5 GB/month first). Deploys now go through PRs: open a PR, wait for green checks, owner merges on GitHub, then `git pull`. Infra changes still only through Terraform.
+- **All 12 weeks are done; the project is complete.** Open follow-ups: the cost recheck on 2026-10-22 (log it, then put the final total in the Word report and in `docs/technical-design.md`); the owner adds names, registration numbers, the date and 4 screenshots to the Word report (yellow placeholders); after submission, teardown per `infrastructure/README.md` (owner decides). Any further change still follows the rules below: plan first, cost rule, PR → green checks → owner merges, infra only through Terraform.
 - Week 1 done: in-memory product CRUD API.
 - Week 2 done (see "Week 2 summary").
 - Week 3 done (see "Week 3 summary").
@@ -16,6 +16,7 @@ Full plan: `docs/PROJECT_PLAN.md`. Read it before planning any week's work.
 - Week 9 done (see "Week 9 summary").
 - Week 10 done (see "Week 10 summary").
 - Week 11 done (see "Week 11 summary"). **Every merge into `main` deploys automatically.**
+- Week 12 done (see "Week 12 summary"). Monitoring, final testing, design document and demo script.
 - Update this section when a week is finished.
 
 ## Priorities (in order)
@@ -393,6 +394,53 @@ Docs: new `docs/cicd.md`; deployment guide (CI is the normal path, image tag tab
 
 Scope cut or deferred: no Terraform in CI, no staging slot (F1), no branch protection, no Dependabot, no automatic rollback (an untestable crash-loop would burn the F1 quota). **The cost recheck from Weeks 8–10 is still due on 2026-10-22.**
 
+## Week 12 summary (branch `week-12-final`, merged through PRs #3, #4, #5 and #6)
+Owner decisions: **Application Insights + platform logs** (new library `azure-monitor-opentelemetry==1.8.10`, approved); **TDD as Markdown in the repo + a Word copy** in the college template; the owner writes the team/contribution parts.
+
+Monitoring (Terraform, ₹0):
+- **foundation `monitoring.tf`:**
+  - `log-ecom-mini`: Log Analytics, malaysiawest, PerGB2018, retention 30 days, **`daily_quota_gb = 0.1`**
+  - `appi-ecom-mini`: workspace-based Application Insights, **`local_authentication_enabled = false`**, daily cap 0.1
+  - `ag-ecom-mini-owner`: email action group (`var.alert_email`)
+  - outputs for these, the connection string marked sensitive
+- **app `monitoring.tf`:**
+  - Monitoring Metrics Publisher for the web app identity
+  - diagnostic setting `to-log-analytics` (AppServiceHTTPLogs, AppServiceConsoleLogs, AppServicePlatformLogs)
+  - metric alert `alert-ecom-mini-http-5xx` (Http5xx Total > 0, 5 min, `auto_mitigate`)
+- New app settings: `APPLICATIONINSIGHTS_CONNECTION_STRING`, and `OTEL_PYTHON_FASTAPI_EXCLUDED_URLS=/health$`.
+- **Remote-state values in `app_settings` are wrapped in `sensitive()`**, because `terraform_remote_state` drops the sensitive mark and a plan printed the connection string.
+
+Code:
+- `app/core/telemetry.py` `configure_telemetry(app)`: a no-op without the connection string. Otherwise it calls `configure_azure_monitor(credential=DefaultAzureCredential(), logger_name="app", enable_live_metrics=True, instrumentation_options={"fastapi": {"enabled": False}})`, then **`FastAPIInstrumentor.instrument_app(app)`**.
+  - The distro's automatic FastAPI instrumentation only patches apps created later, so nothing was recorded at first.
+  - A regression test walks the built middleware chain (mutation-checked).
+- Checkout logs `Order <id> placed by user <user_id>, total <amount>` (never the email).
+- **`POST /diagnostics/error`**: admin-only, raises `SampleError` and returns 500.
+- API version **1.0.0**.
+- `alembic/env.py` uses `fileConfig(..., disable_existing_loggers=False)`; the default silenced the app's loggers when migrations ran in-process.
+- CI/CD has a **`workflow_dispatch` "Run workflow" button**; it deploys only on main.
+  - It was added because a GitHub incident ("Delays for Pull Requests and Webhook deliveries") dropped the push runs for the PR #4 and #5 merges. For PR #4, the API answered 422 for the merge commit.
+
+Verified live:
+- The sample error reached HTTP logs and console logs (full traceback), and Application Insights `AppExceptions` and `AppRequests` (500).
+- The "Fired" and "Resolved" emails arrived.
+- 7 KQL queries in `docs/monitoring.md` were run against the workspace.
+- Request timings: reads 12–53 ms; login/register 250–330 ms (Argon2).
+
+Final testing:
+- 196 tests pass. New:
+  - `tests/test_concurrency.py`: two real committing sessions race for the last unit, giving one order, one 409 and stock 0. It passed 10 out of 10; without `with_for_update` it fails with a double sale. The fixture deletes its rows.
+  - `test_role_change_applies_to_an_existing_token`
+- `docs/testing.md` has the endpoint × status matrix. No endpoint gaps were found.
+
+Docs:
+- new `docs/monitoring.md`, `docs/testing.md`, `docs/technical-design.md` and `docs/demo-script.md` (15 minutes, a pre-demo checklist, a prepared `demo-change` version bump, likely questions)
+- `infrastructure/README.md` has a **teardown section** (keep / stop the API / remove everything)
+- README, cicd, deployment guide and cost log updated
+- **Word report** `CSE3130-Mini-Project-Report.docx` on the owner's Desktop, in the college template: 4 chapters, IEEE references, figures and charts from real data, yellow placeholders. It is generated by a script in the session scratchpad and is not in the repo.
+
+Scope cut or deferred: no availability (ping) tests (₹170+ a month), no dashboards, no database query telemetry (the distro covers psycopg2, not psycopg 3), no live admin-flow automation (it would need an admin password in CI), and the `httpx` deprecation warning remains.
+
 ## Conventions
 - Type hints on all functions. Pydantic schemas are separate from SQLAlchemy models.
 - Routers stay thin; business logic goes in `services/`. DB access via a session dependency (`get_db`).
@@ -430,6 +478,8 @@ python scripts/smoke_test.py <url>      # check a deployment (local or https://<
 # deploy: open a PR, checks go green, merge on GitHub -> GitHub Actions builds, pushes and deploys main
 # rollback: GitHub -> Actions -> Rollback -> Run workflow (image_tag = 7-char SHA)
 WEBAPP_NAME=<app> RESOURCE_GROUP=rg-ecom-mini bash scripts/deploy.sh <acr>.azurecr.io/ecom-api:<sha>   # manual fallback
+# missed push run: GitHub -> Actions -> CI/CD -> Run workflow (main)
+# errors / logs: Portal -> appi-ecom-mini -> Failures; KQL in docs/monitoring.md
 ```
 
 ## Workflow instructions for Claude

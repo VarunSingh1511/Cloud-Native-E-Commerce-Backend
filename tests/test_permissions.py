@@ -4,8 +4,11 @@ from typing import Any
 
 import pytest
 from fastapi.testclient import TestClient
+from sqlalchemy import select
+from sqlalchemy.orm import Session
 
-from tests.helpers import VALID_PRODUCT, create_product
+from app.models.user import User, UserRole
+from tests.helpers import VALID_PRODUCT, bearer, create_product, login, register
 
 # Every endpoint that changes data. "{id}" is replaced with a real product ID.
 WRITE_REQUESTS: list[tuple[str, str, dict[str, Any] | None]] = [
@@ -73,3 +76,20 @@ def test_customer_can_read(customer_client: TestClient, admin_client: TestClient
     product = create_product(admin_client)
 
     assert customer_client.get(f"/products/{product['id']}").status_code == 200
+
+
+def test_role_change_applies_to_an_existing_token(client: TestClient, db_session: Session) -> None:
+    # The token holds no role; the role is read from the database on every request.
+    register(client, "promoted@example.com")
+    headers = bearer(login(client, "promoted@example.com"))
+    user = db_session.scalar(select(User).where(User.email == "promoted@example.com"))
+
+    assert client.post("/categories", json={"name": "Before"}, headers=headers).status_code == 403
+
+    user.role = UserRole.ADMIN
+    db_session.commit()
+    assert client.post("/categories", json={"name": "After"}, headers=headers).status_code == 201
+
+    user.role = UserRole.CUSTOMER
+    db_session.commit()
+    assert client.post("/categories", json={"name": "Again"}, headers=headers).status_code == 403

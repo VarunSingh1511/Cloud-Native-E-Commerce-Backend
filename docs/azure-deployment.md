@@ -177,6 +177,7 @@ python scripts/smoke_test.py https://<app>.azurewebsites.net
 | --- | --- |
 | Check it works | `python scripts/smoke_test.py https://<app>.azurewebsites.net` |
 | Follow the logs | `az webapp log tail -g rg-ecom-mini -n <app>` |
+| See errors and slow requests | Portal → Application Insights `appi-ecom-mini` → Failures / Performance; queries in `docs/monitoring.md` |
 | Restart | `az webapp restart -g rg-ecom-mini -n <app>` |
 | Create an admin | Temporary firewall rule for your IP, then run `create_admin` locally with the Azure `DATABASE_URL`. See "Creating an admin on Azure" below. `az webapp ssh` does **not** work, because the image deliberately has no SSH server. |
 | Stop the app | `az webapp stop -g rg-ecom-mini -n <app>` (F1 is free anyway) |

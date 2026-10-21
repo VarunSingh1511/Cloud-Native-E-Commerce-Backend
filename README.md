@@ -54,6 +54,11 @@ A cloud-native e-commerce backend built with FastAPI, developed as a Cloud Compu
   - Every merge into `main` is then deployed to Azure automatically and checked with the smoke test. A failing check stops the deployment.
   - GitHub logs in to Azure with OIDC: no password is stored anywhere, and the deploy identity can only push images and update the web app.
   - A one-click workflow rolls back to (or forward to) any earlier image.
+- **Week 12: Monitoring, final testing and documentation.**
+  - Every request, its duration and every error with its stack trace go to Azure Application Insights. The app authenticates with its own Azure identity, so no keys are needed.
+  - The platform's own logs go to Log Analytics, and an e-mail alert fires when the API returns a server error. Log volume is capped, so monitoring stays free.
+  - New tests prove that two customers buying the last item at the same moment get one order and one "out of stock", and that role changes apply immediately (196 tests).
+  - A technical design document, a test-coverage matrix and a demo script.
 
 ## Technology
 
@@ -67,7 +72,8 @@ A cloud-native e-commerce backend built with FastAPI, developed as a Cloud Compu
 - Docker and Docker Compose
 - Terraform (infrastructure as code)
 - GitHub Actions (CI/CD)
-- Azure: App Service, Container Registry, Database for PostgreSQL, Blob Storage
+- Azure: App Service, Container Registry, Database for PostgreSQL, Blob Storage, Monitor (Application Insights, Log Analytics)
+- OpenTelemetry (request and error telemetry)
 
 ## Project structure
 
@@ -105,6 +111,10 @@ docs/storage.md             # Product images in Azure Blob Storage
 docs/database-hardening.md  # Database user, TLS verification and the backup restore drill
 docs/terraform.md           # How the Azure setup is managed with Terraform
 docs/cicd.md                # The GitHub Actions pipeline: tests, deploy, OIDC login, rollback
+docs/monitoring.md          # Application Insights, platform logs, the error alert, useful queries
+docs/testing.md             # How the tests work and which responses each endpoint is tested for
+docs/technical-design.md    # The whole design in one document
+docs/demo-script.md         # A 15-minute walkthrough of the live system
 .github/workflows/          # ci-cd.yml (test, build, deploy) and rollback.yml
 infrastructure/             # Terraform: foundation/ (protected) and app/ (rebuildable), see its README
 Dockerfile                  # Recipe for the API's container image
@@ -350,7 +360,7 @@ Check a deployment by hand with:
 python scripts/smoke_test.py https://<your-app>.azurewebsites.net
 ```
 
-The Azure resources themselves are managed with Terraform: see [infrastructure/README.md](infrastructure/README.md) for how to plan, apply, and rebuild the app layer. The full set of deployment commands, the design decisions, how to create an admin on Azure, and the free-tier limits are in [docs/azure-deployment.md](docs/azure-deployment.md). Costs are tracked in [docs/azure-cost-log.md](docs/azure-cost-log.md).
+The Azure resources themselves are managed with Terraform: see [infrastructure/README.md](infrastructure/README.md) for how to plan, apply, and rebuild the app layer. The full set of deployment commands, the design decisions, how to create an admin on Azure, and the free-tier limits are in [docs/azure-deployment.md](docs/azure-deployment.md). Costs are tracked in [docs/azure-cost-log.md](docs/azure-cost-log.md). Errors, request timings and logs of the live API are in Azure Application Insights and Log Analytics; see [docs/monitoring.md](docs/monitoring.md).
 
 ## Database migrations
 

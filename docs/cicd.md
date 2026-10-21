@@ -76,6 +76,12 @@ Nothing secret is stored in GitHub. The five "secrets" (`AZURE_CLIENT_ID`, `AZUR
 | Repository renamed or deleted, then re-created by someone else ("repo-jacking") | GitHub's token names the repository by its numeric owner and repository IDs, and the federated credential trusts exactly those IDs. |
 | Two deployments at once | `concurrency: deploy-production` with `cancel-in-progress: false`: a newer deploy waits, and a running one is never interrupted halfway. |
 
+## Manual run (added in Week 12)
+
+**Actions → CI/CD → Run workflow** (`workflow_dispatch`) runs the whole pipeline on demand: tests, Terraform checks, image and, **only when run on `main`**, the deploy. Run on any other branch, the deploy job is skipped by its `if:` condition, and the `production` environment refuses non-`main` branches as well.
+
+It exists because GitHub sometimes fails to start the push-triggered run (see "Problems met and fixed"). It's also a convenient way to redeploy `main` right before a demo.
+
 ## Rollback
 
 **Actions → Rollback → Run workflow**, then enter an image tag (a 7-character commit SHA that exists in the registry). It checks the tag format, confirms the image exists (`docker manifest inspect`), then runs the same `scripts/deploy.sh` with the smoke test. The same button rolls forward again with the newer tag. No build happens, so it is quicker than a deploy.
@@ -99,6 +105,7 @@ After the CI deploys, `terraform plan` shows **No changes** for both layers. The
 | Problem | Cause | Fix |
 | --- | --- | --- |
 | First deploy: `AADSTS700213: No matching federated identity record found for presented assertion subject` | GitHub's OIDC token names the repository as `owner@ownerID/repo@repoID`. The federated credential had the name-only form `repo:owner/repo:environment:production`. | The subject in Terraform now uses the ID form (`var.github_repository`). One in-place change; then "Re-run failed jobs". This form is also safer (see repo-jacking above). |
+| Week 12: merges of PRs #4 and #5 started no CI/CD run | A GitHub incident ("Delays for Pull Requests and Webhook deliveries", opened 14:52 UTC). For PR #4's merge commit, GitHub's API even answered 422 (commit not found) while `main` pointed at it. The workflow was active and unchanged, and the commit message had no skip marker. | Added the manual **Run workflow** trigger (`workflow_dispatch`) and started the pipeline by hand on `main`. It deployed both fixes. |
 
 ## Day-to-day
 

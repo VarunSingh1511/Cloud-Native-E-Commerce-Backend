@@ -4,8 +4,8 @@ The project's Azure setup, described as code. Concepts and design decisions are 
 
 | Layer | Folder | What it contains | Can be destroyed? |
 | --- | --- | --- | --- |
-| Foundation | `foundation/` | Resource group, budget, container registry, PostgreSQL server and `ecom` database, storage account and `product-images` container, database passwords, GitHub Actions deploy identity (federated credential + AcrPush) | **No.** `prevent_destroy` refuses for the data, the registry and the resource group. |
-| App | `app/` | App Service plan, web app, its two role assignments, the deploy identity's Website Contributor role on the web app, one database firewall rule per outbound IP, `SECRET_KEY` | **Yes**, at any time. Rebuild it with the steps below. |
+| Foundation | `foundation/` | Resource group, budget, container registry, PostgreSQL server and `ecom` database, storage account and `product-images` container, database passwords, GitHub Actions deploy identity (federated credential + AcrPush), Log Analytics workspace, Application Insights, alert e-mail action group | **No.** `prevent_destroy` refuses for the data, the registry and the resource group. |
+| App | `app/` | App Service plan, web app, its two role assignments, the deploy identity's Website Contributor role on the web app, the telemetry role, one database firewall rule per outbound IP, diagnostic setting, HTTP 5xx alert, `SECRET_KEY` | **Yes**, at any time. Rebuild it with the steps below. |
 
 The app layer reads the foundation's outputs from `foundation/terraform.tfstate`, so **always work on the foundation first**.
 
@@ -80,3 +80,19 @@ Do step 3 **before** step 4. Then the running app's open connections keep workin
 - **Deployments change the running image outside Terraform.** GitHub Actions deploys each push to `main` (see [docs/cicd.md](../docs/cicd.md)). The web app ignores changes to its image tag (`ignore_changes`), so `apply` never rolls back a newer deployment.
 - **The GitHub secret `AZURE_CLIENT_ID`** is the foundation output `github_deploy_client_id`. It doesn't change when the app layer is rebuilt. If the repository is ever moved or re-created, update `github_repository` (`owner@ownerID/repo@repoID`, as shown in the `AADSTS700213` error) and apply the foundation.
 - **Emergency stop for everything**, including the locked parts: `az group delete -n rg-ecom-mini --yes`. Terraform's lock does not stop direct Azure commands.
+
+## After the project: teardown
+Everything currently runs on free allowances. **The PostgreSQL offer lasts 12 months, though**; after that, B1ms costs about ₹56 a day. So decide after the submission:
+
+| Option | Command | What stays | Cost afterwards |
+| --- | --- | --- | --- |
+| **Keep everything** for a while (portfolio, interviews) | nothing | everything | ₹0 while the free offers last. Check `docs/azure-cost-log.md` monthly. |
+| **Stop the public API**, keep the data | `terraform -chdir=infrastructure/app destroy` | registry, database, images, monitoring | ₹0 within the offers. Rebuild later with the steps above (about 35 minutes). |
+| **Remove everything** | see below | nothing (the code stays in Git) | ₹0 |
+
+**To remove everything** (the owner's explicit decision, because it deletes the database and every image):
+1. Destroy the app layer: `terraform -chdir=infrastructure/app destroy`.
+2. Make a final **database export**, if you want to keep the data: run `pg_dump` with the admin URL from `terraform -chdir=infrastructure/foundation output -raw admin_database_url`, from a PC given a temporary firewall rule.
+3. In `infrastructure/foundation/*.tf`, remove the `prevent_destroy = true` lines (a deliberate, visible change), then run `terraform -chdir=infrastructure/foundation destroy`.
+4. Check that nothing is left: `az group show -n rg-ecom-mini` should report "not found". `az group delete -n rg-ecom-mini --yes` is the fallback, and also the emergency stop.
+5. Delete the GitHub `production` environment's secrets (Settings → Environments), and record the final cost in `docs/azure-cost-log.md`.
