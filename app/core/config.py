@@ -31,6 +31,10 @@ class Settings(BaseSettings):
     # unset, image upload answers 503 and everything else works normally.
     azure_storage_account_url: str | None = None
     azure_storage_container: str = "product-images"
+    # Azure Application Insights. When unset (tests, local runs), no telemetry is
+    # sent. Not a secret: key authentication is disabled, so sending also needs
+    # the app's Azure identity.
+    applicationinsights_connection_string: str | None = None
 
 
 # One shared instance; the app fails at startup if a required setting is missing.

@@ -1,5 +1,7 @@
 """Tests for checkout (POST /orders): the single-transaction order process."""
 
+import logging
+
 import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy import func, select
@@ -38,6 +40,20 @@ def test_checkout_creates_order(customer_client: TestClient, admin_client: TestC
         (line["product_name"], line["unit_price"], line["quantity"], line["line_total"])
         for line in order["items"]
     ] == [("Laptop", 100, 2, 200), ("Pen", 19.99, 3, 59.97)]
+
+
+def test_checkout_logs_the_order_without_personal_data(
+    customer_client: TestClient, admin_client: TestClient, caplog: pytest.LogCaptureFixture
+) -> None:
+    product = stocked_product(admin_client, stock=5, price=100)
+    add_to_cart(customer_client, product["id"], quantity=2)
+    caplog.set_level(logging.INFO, logger="app.services.orders")
+
+    order = customer_client.post("/orders").json()
+
+    assert f"Order {order['id']} placed by user" in caplog.text
+    assert "total 200.00" in caplog.text
+    assert "customer@example.com" not in caplog.text
 
 
 def test_checkout_takes_stock_and_empties_cart(

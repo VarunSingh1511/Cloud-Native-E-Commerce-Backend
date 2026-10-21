@@ -5,6 +5,7 @@ everything (create the order, take the stock, empty the cart) or nothing.
 See docs/checkout.md for a step-by-step explanation.
 """
 
+import logging
 from decimal import Decimal
 
 from sqlalchemy import select
@@ -16,6 +17,8 @@ from app.models.inventory import Inventory
 from app.models.order import Order, OrderItem, OrderStatus
 from app.models.user import User, UserRole
 from app.services.cart import get_or_create_cart
+
+logger = logging.getLogger(__name__)
 
 
 def checkout(db: Session, user: User) -> Order:
@@ -36,6 +39,8 @@ def checkout(db: Session, user: User) -> Order:
         db.rollback()
         raise
     db.refresh(order)
+    # A user ID, never an email: logs should not hold personal data.
+    logger.info("Order %s placed by user %s, total %s", order.id, user.id, order.total_amount)
     return order
 
 

@@ -13,7 +13,10 @@ import app.models  # noqa: F401
 config = context.config
 
 if config.config_file_name is not None:
-    fileConfig(config.config_file_name)
+    # disable_existing_loggers=False: by default fileConfig switches off every
+    # logger that already exists, which silenced the app's own loggers (e.g. the
+    # checkout log) whenever migrations ran in the same process, as in the tests.
+    fileConfig(config.config_file_name, disable_existing_loggers=False)
 
 # Autogenerate compares this metadata (our models) with the live database.
 target_metadata = Base.metadata
