@@ -1,5 +1,7 @@
 # Cloud-Native E-Commerce Platform
 
+[![CI/CD](https://github.com/VarunSingh1511/Cloud-Native-E-Commerce-Backend/actions/workflows/ci-cd.yml/badge.svg)](https://github.com/VarunSingh1511/Cloud-Native-E-Commerce-Backend/actions/workflows/ci-cd.yml)
+
 A cloud-native e-commerce backend built with FastAPI, developed as a Cloud Computing & DevOps mini project. The API is deliberately simple. The focus is on deploying and operating it with Docker, Azure, Terraform and GitHub Actions.
 
 ## Progress
@@ -47,6 +49,11 @@ A cloud-native e-commerce backend built with FastAPI, developed as a Cloud Compu
   - The whole Azure setup is described in Terraform: the existing resources were adopted without downtime for data.
   - The parts holding data (database, images, container registry) are protected from accidental deletion.
   - The web app layer has been destroyed and rebuilt entirely from code.
+- **Week 11: CI/CD with GitHub Actions.**
+  - Every pull request runs the tests against a real PostgreSQL, checks the migrations and the Terraform code, and builds and starts the Docker image.
+  - Every merge into `main` is then deployed to Azure automatically and checked with the smoke test. A failing check stops the deployment.
+  - GitHub logs in to Azure with OIDC: no password is stored anywhere, and the deploy identity can only push images and update the web app.
+  - A one-click workflow rolls back to (or forward to) any earlier image.
 
 ## Technology
 
@@ -59,6 +66,7 @@ A cloud-native e-commerce backend built with FastAPI, developed as a Cloud Compu
 - pytest
 - Docker and Docker Compose
 - Terraform (infrastructure as code)
+- GitHub Actions (CI/CD)
 - Azure: App Service, Container Registry, Database for PostgreSQL, Blob Storage
 
 ## Project structure
@@ -82,6 +90,7 @@ app/
 └── scripts/start.py        # Container start command on Azure: migrate, then serve
 scripts/smoke_test.py       # Checks a running deployment (local or Azure)
 scripts/create_app_db_user.py # Creates the limited database user the app connects as
+scripts/deploy.sh           # Points the web app at an image, waits until healthy, smoke tests (used by CI)
 alembic/versions/           # Database migrations
 tests/                      # pytest suite (conftest.py holds shared fixtures)
 docs/database-design.md     # Tables, relationships and design decisions
@@ -95,6 +104,8 @@ docs/azure-deployment.md    # How the app is deployed to Azure, redeployed and r
 docs/storage.md             # Product images in Azure Blob Storage
 docs/database-hardening.md  # Database user, TLS verification and the backup restore drill
 docs/terraform.md           # How the Azure setup is managed with Terraform
+docs/cicd.md                # The GitHub Actions pipeline: tests, deploy, OIDC login, rollback
+.github/workflows/          # ci-cd.yml (test, build, deploy) and rollback.yml
 infrastructure/             # Terraform: foundation/ (protected) and app/ (rebuildable), see its README
 Dockerfile                  # Recipe for the API's container image
 docker-compose.yml          # Runs the database, migrations and API together
@@ -331,7 +342,9 @@ docker build ──► Azure Container Registry ──► App Service (Linux, F1
 - Settings such as `DATABASE_URL` and `SECRET_KEY` are stored as App Service settings, never in the repository.
 - On start, the container applies any pending database migrations and then starts the API.
 
-Check a deployment with:
+**Deployments are automatic:** merging a pull request into `main` runs the tests, then builds, pushes and deploys the image, and finishes with the smoke test. **Actions → Rollback** redeploys an earlier image tag. See [docs/cicd.md](docs/cicd.md).
+
+Check a deployment by hand with:
 
 ```bash
 python scripts/smoke_test.py https://<your-app>.azurewebsites.net

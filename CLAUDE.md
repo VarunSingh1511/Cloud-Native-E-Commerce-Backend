@@ -4,7 +4,7 @@ Project: **Cloud-Native E-Commerce Platform** (college mini project, Cloud Compu
 Full plan: `docs/PROJECT_PLAN.md`. Read it before planning any week's work.
 
 ## Current status
-- **Current week: 11** (GitHub Actions CI/CD). Branch `week-11-cicd`. **Cost rule applies.** Azure is now managed by Terraform (`infrastructure/`); make infra changes there, never by hand. CI deploys images with `az webapp config container set --container-image-name <acr>.azurecr.io/ecom-api:<sha>` (Terraform ignores the image tag). Prefer OIDC federated credentials for GitHub → Azure (no stored secret).
+- **Current week: 12** (Monitoring, final testing, Technical Design Document, demo). Branch `week-12-final`. **Cost rule applies** (Application Insights / Log Analytics: check the free 5 GB/month first). Deploys now go through PRs: open a PR, wait for green checks, owner merges on GitHub, then `git pull`. Infra changes still only through Terraform.
 - Week 1 done: in-memory product CRUD API.
 - Week 2 done (see "Week 2 summary").
 - Week 3 done (see "Week 3 summary").
@@ -15,6 +15,7 @@ Full plan: `docs/PROJECT_PLAN.md`. Read it before planning any week's work.
 - Week 8 done (see "Week 8 summary"). **The API is live on Azure.**
 - Week 9 done (see "Week 9 summary").
 - Week 10 done (see "Week 10 summary").
+- Week 11 done (see "Week 11 summary"). **Every merge into `main` deploys automatically.**
 - Update this section when a week is finished.
 
 ## Priorities (in order)
@@ -357,6 +358,41 @@ Docs: new `docs/terraform.md` and `infrastructure/README.md` (runbook: setup, re
 
 Scope cut or deferred: no remote state, no Terraform in CI, no PostgreSQL provider (roles via script), no write-only (`_wo`) password arguments yet.
 
+## Week 11 summary (branch `week-11-cicd`, merged through PRs #1 and #2)
+Owner decisions: **automatic deploy on `main`** (no approval gate); **no new lint library**. The repo is **public**, so Actions are free. `gh` isn't installed, so GitHub settings are done by the owner in the browser.
+
+Workflows:
+- `.github/workflows/ci-cd.yml` runs on `pull_request` and `push` to main, with `permissions: contents: read`. Its jobs:
+  - `test`: a `postgres:16.15` service matching the conftest defaults, Python 3.13 with pip cache, `pytest`, then `alembic check`.
+  - `terraform`: `fmt -check -recursive`, then `init -backend=false` and `validate` for both layers. Terraform is 1.15.8.
+  - `image`: needs `test`; `docker build`, then waits until the Docker HEALTHCHECK is `healthy`, using dummy settings.
+  - `deploy`: runs only on a push to main and needs all three. It uses `environment: production`, `id-token: write` and `concurrency: deploy-production` (`cancel-in-progress: false`). Steps: `azure/login` with OIDC, `az acr login`, build and push `ecom-api:${GITHUB_SHA::7}`, then `bash scripts/deploy.sh`.
+- `.github/workflows/rollback.yml`: `workflow_dispatch` with `image_tag`, passed via `env` and checked against `^[0-9a-f]{7}$`, then `docker manifest inspect` and `scripts/deploy.sh`.
+- `scripts/deploy.sh <image>` (needs `WEBAPP_NAME` and `RESOURCE_GROUP`): `container set`, restart, sleep 30, poll `/health` up to 36×10 s, then `exec` the smoke test.
+- Actions are pinned to commit SHAs: checkout v7.0.1, setup-python v7.0.0, setup-terraform v4.0.1, azure/login v3.1.0 (`a641126`, the annotated tag's commit).
+
+Azure (₹0, Terraform):
+- **foundation:** `azurerm_user_assigned_identity.github_deploy` (`id-ecom-mini-github-deploy`, indiasouthcentral), a federated credential and AcrPush on the registry. Outputs `github_deploy_client_id` and `github_deploy_principal_id`.
+- **app:** Website Contributor on the web app for that identity.
+- **The OIDC subject uses GitHub's ID form:** `repo:VarunSingh1511@184231506/Cloud-Native-E-Commerce-Backend@1341839399:environment:production` (`var.github_repository`). The name-only form failed with `AADSTS700213`.
+- `az acr login` works with AcrPush only; no Reader role was needed.
+
+GitHub:
+- Environment `production`, with deployment branches = `main` only and no reviewers.
+- 5 environment secrets: `AZURE_CLIENT_ID`, `AZURE_TENANT_ID`, `AZURE_SUBSCRIPTION_ID`, `ACR_NAME`, `WEBAPP_NAME`. Names are masked as `***` in the public logs (checked).
+
+Verified:
+- A deliberately failing test turned Tests red, and the image and deploy jobs were skipped. It was then reverted.
+- PR runs: deploy skipped.
+- The push to main deployed `ecom-api:34e7d57` (deploy job 2 min 35 s), smoke test 10/10.
+- Rollback to `a88926b` (128 s) and roll forward to `34e7d57` (127 s), each 10/10.
+- After the CI deploys, both Terraform layers show "No changes".
+- 187 tests pass.
+
+Docs: new `docs/cicd.md`; deployment guide (CI is the normal path, image tag table), infrastructure runbook, cost log, README (badge, Week 11) updated.
+
+Scope cut or deferred: no Terraform in CI, no staging slot (F1), no branch protection, no Dependabot, no automatic rollback (an untestable crash-loop would burn the F1 quota). **The cost recheck from Weeks 8–10 is still due on 2026-10-22.**
+
 ## Conventions
 - Type hints on all functions. Pydantic schemas are separate from SQLAlchemy models.
 - Routers stay thin; business logic goes in `services/`. DB access via a session dependency (`get_db`).
@@ -391,8 +427,9 @@ az group delete -n rg-ecom-mini --yes   # EMERGENCY STOP: deletes everything in 
 terraform -chdir=infrastructure/foundation plan   # infra changes: plan first, read every line, then apply
 terraform -chdir=infrastructure/app plan          # app layer (destroy/rebuild steps in infrastructure/README.md)
 python scripts/smoke_test.py <url>      # check a deployment (local or https://<app>.azurewebsites.net)
-# deploy a new image: build in a clean worktree, tag = git short SHA; az acr login + docker push;
-# az webapp config container set --container-image-name <acr>.azurecr.io/ecom-api:<sha>; az webapp restart
+# deploy: open a PR, checks go green, merge on GitHub -> GitHub Actions builds, pushes and deploys main
+# rollback: GitHub -> Actions -> Rollback -> Run workflow (image_tag = 7-char SHA)
+WEBAPP_NAME=<app> RESOURCE_GROUP=rg-ecom-mini bash scripts/deploy.sh <acr>.azurecr.io/ecom-api:<sha>   # manual fallback
 ```
 
 ## Workflow instructions for Claude

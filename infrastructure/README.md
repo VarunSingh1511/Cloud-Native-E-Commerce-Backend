@@ -4,8 +4,8 @@ The project's Azure setup, described as code. Concepts and design decisions are 
 
 | Layer | Folder | What it contains | Can be destroyed? |
 | --- | --- | --- | --- |
-| Foundation | `foundation/` | Resource group, budget, container registry, PostgreSQL server and `ecom` database, storage account and `product-images` container, database passwords | **No.** `prevent_destroy` refuses. |
-| App | `app/` | App Service plan, web app, its two role assignments, one database firewall rule per outbound IP, `SECRET_KEY` | **Yes**, at any time. Rebuild it with the steps below. |
+| Foundation | `foundation/` | Resource group, budget, container registry, PostgreSQL server and `ecom` database, storage account and `product-images` container, database passwords, GitHub Actions deploy identity (federated credential + AcrPush) | **No.** `prevent_destroy` refuses for the data, the registry and the resource group. |
+| App | `app/` | App Service plan, web app, its two role assignments, the deploy identity's Website Contributor role on the web app, one database firewall rule per outbound IP, `SECRET_KEY` | **Yes**, at any time. Rebuild it with the steps below. |
 
 The app layer reads the foundation's outputs from `foundation/terraform.tfstate`, so **always work on the foundation first**.
 
@@ -77,5 +77,6 @@ Do step 3 **before** step 4. Then the running app's open connections keep workin
 ## Guardrails
 - **Never** remove `prevent_destroy` from the foundation without the owner's explicit OK. The registry, the database and the images are meant to survive.
 - **Never** commit `terraform.tfstate*`, `terraform.tfvars`, `*.tfplan` or `.terraform/`. `.gitignore` covers all of them; `.terraform.lock.hcl` *is* committed.
-- **Deployments change the running image outside Terraform.** The web app ignores changes to its image tag (`ignore_changes`), so `apply` never rolls back a newer deployment.
+- **Deployments change the running image outside Terraform.** GitHub Actions deploys each push to `main` (see [docs/cicd.md](../docs/cicd.md)). The web app ignores changes to its image tag (`ignore_changes`), so `apply` never rolls back a newer deployment.
+- **The GitHub secret `AZURE_CLIENT_ID`** is the foundation output `github_deploy_client_id`. It doesn't change when the app layer is rebuilt. If the repository is ever moved or re-created, update `github_repository` (`owner@ownerID/repo@repoID`, as shown in the `AADSTS700213` error) and apply the foundation.
 - **Emergency stop for everything**, including the locked parts: `az group delete -n rg-ecom-mini --yes`. Terraform's lock does not stop direct Azure commands.
