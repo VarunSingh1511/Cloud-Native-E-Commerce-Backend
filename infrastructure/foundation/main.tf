@@ -163,6 +163,9 @@ resource "azurerm_federated_identity_credential" "github_production" {
   audience                  = ["api://AzureADTokenExchange"]
   # Only jobs that use the "production" environment of this repository. GitHub
   # lets that environment deploy from the main branch only (repository settings).
+  # GitHub's token names the repository as owner@ownerID/repo@repoID: the numeric
+  # IDs never change, so a deleted or renamed repository cannot be re-created by
+  # someone else to obtain this trust ("repo-jacking").
   subject = "repo:${var.github_repository}:environment:production"
 }
 

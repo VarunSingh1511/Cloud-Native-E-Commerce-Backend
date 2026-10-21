@@ -133,6 +133,8 @@ az webapp config set -g rg-ecom-mini -n <app> --startup-file "python -m app.scri
 - `--public-access None` turns public access *off*, so it has to be enabled afterwards.
 
 ## Deploying a new version
+**Since Week 11, GitHub Actions deploys every push to `main`** (merge a PR and it goes live), and **Actions → Rollback** deploys an earlier tag. See [cicd.md](cicd.md). The commands below are the manual fallback; `scripts/deploy.sh` runs the last three of them, plus a wait for `/health`.
+
 ```bash
 SHA=$(git rev-parse --short=7 HEAD)
 docker build -t <acr>.azurecr.io/ecom-api:$SHA .
@@ -143,8 +145,6 @@ python scripts/smoke_test.py https://<app>.azurewebsites.net
 ```
 
 **Rollback:** run the same `container set` with the previous SHA, then restart. Old images stay in the registry.
-
-From Week 11, GitHub Actions does these steps on every push to `main`.
 
 ### Verified in Week 8
 | Check | Result |
@@ -163,7 +163,9 @@ From Week 11, GitHub Actions does these steps on every push to `main`.
 | --- | --- | --- |
 | `08368f2`, `5fe4e16` | 0.4.0, 0.8.0 | **No.** Built before `app/scripts/start.py` existed. Not valid rollback targets. |
 | `82ab820` | 0.8.0 | Yes |
-| `5d73b57` | 0.8.1 | Yes (**live**) |
+| `5d73b57` | 0.8.1 | Yes |
+| `a88926b` | 0.8.1 + Week 9 product images | Yes (Week 11 rollback drill) |
+| `34e7d57` and later | Week 11+, built by GitHub Actions | Yes (see `az acr repository show-tags`) |
 
 **Temporary B1:**
 - To finish verification on the same day after the F1 quota was used up, the plan ran on **Basic B1 for 21 minutes**, approved by the owner, then went straight back to F1.
