@@ -6,6 +6,7 @@ from typing import Any
 
 import pytest
 from azure.identity import DefaultAzureCredential
+from fastapi import FastAPI
 
 from app.core import telemetry
 from app.core.config import settings
@@ -22,13 +23,25 @@ def calls(monkeypatch: pytest.MonkeyPatch) -> Iterator[list[dict[str, Any]]]:
     app_logger.setLevel(original_level)
 
 
+def has_opentelemetry_middleware(app: FastAPI) -> bool:
+    """Whether OpenTelemetry is one of the layers every request passes through."""
+    layer: Any = app.build_middleware_stack()
+    while layer is not None:
+        if type(layer).__name__ == "OpenTelemetryMiddleware":
+            return True
+        layer = getattr(layer, "app", None)  # each middleware wraps the next one
+    return False
+
+
 def test_telemetry_is_off_without_connection_string(
     monkeypatch: pytest.MonkeyPatch, calls: list[dict[str, Any]]
 ) -> None:
     monkeypatch.setattr(settings, "applicationinsights_connection_string", None)
+    app = FastAPI()
 
-    assert telemetry.configure_telemetry() is False
+    assert telemetry.configure_telemetry(app) is False
     assert calls == []
+    assert not has_opentelemetry_middleware(app)
 
 
 def test_telemetry_uses_connection_string_and_azure_identity(
@@ -38,7 +51,7 @@ def test_telemetry_uses_connection_string_and_azure_identity(
         settings, "applicationinsights_connection_string", "InstrumentationKey=00000000-test"
     )
 
-    assert telemetry.configure_telemetry() is True
+    assert telemetry.configure_telemetry(FastAPI()) is True
     assert len(calls) == 1
     call = calls[0]
     assert call["connection_string"] == "InstrumentationKey=00000000-test"
@@ -46,3 +59,19 @@ def test_telemetry_uses_connection_string_and_azure_identity(
     assert isinstance(call["credential"], DefaultAzureCredential)
     assert call["logger_name"] == "app"
     assert logging.getLogger("app").level == logging.INFO
+
+
+def test_telemetry_instruments_the_existing_app(
+    monkeypatch: pytest.MonkeyPatch, calls: list[dict[str, Any]]
+) -> None:
+    # Regression test: the first version relied on the library's automatic
+    # instrumentation, which only affects apps created later, so no request
+    # reached Application Insights.
+    monkeypatch.setattr(
+        settings, "applicationinsights_connection_string", "InstrumentationKey=00000000-test"
+    )
+    app = FastAPI()
+
+    telemetry.configure_telemetry(app)
+
+    assert has_opentelemetry_middleware(app)

@@ -10,16 +10,17 @@ import logging
 
 from azure.identity import DefaultAzureCredential
 from azure.monitor.opentelemetry import configure_azure_monitor
+from fastapi import FastAPI
+from opentelemetry.instrumentation.fastapi import FastAPIInstrumentor
 
 from app.core.config import settings
 
 
-def configure_telemetry() -> bool:
-    """Start sending telemetry if APPLICATIONINSIGHTS_CONNECTION_STRING is set.
+def configure_telemetry(app: FastAPI) -> bool:
+    """Start sending telemetry for `app` if APPLICATIONINSIGHTS_CONNECTION_STRING is set.
 
-    Must run before the FastAPI app is created, so that its requests are
-    recorded. Returns whether telemetry was turned on. Tests and local runs leave
-    the setting empty, so they send nothing.
+    Returns whether telemetry was turned on. Tests and local runs leave the
+    setting empty, so they send nothing.
     """
     if not settings.applicationinsights_connection_string:
         return False
@@ -33,7 +34,14 @@ def configure_telemetry() -> bool:
         # become "traces" in Application Insights.
         logger_name="app",
         enable_live_metrics=True,
+        # The automatic FastAPI instrumentation only affects apps created AFTER
+        # this call, but ours already exists. It is instrumented explicitly below.
+        instrumentation_options={"fastapi": {"enabled": False}},
     )
+    # Adds OpenTelemetry middleware to this app: one "request" per HTTP call, and
+    # unhandled errors as "exceptions". OTEL_PYTHON_FASTAPI_EXCLUDED_URLS
+    # (an App Service setting) leaves out the /health probe.
+    FastAPIInstrumentor.instrument_app(app)
     # Python's default level is WARNING; also send the app's INFO records.
     logging.getLogger("app").setLevel(logging.INFO)
     return True
